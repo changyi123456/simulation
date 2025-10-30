@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙星系統引力振盪模擬</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+        .info-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease;
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">雙星系統引力振盪模擬</h1>
+            <p class="mt-2 text-lg text-gray-600">觀察在兩個固定質量引力作用下，物體的振盪行為</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 lg:order-2 bg-white p-6 rounded-xl shadow-lg h-fit">
+                <div class="space-y-4">
+                     <div class="flex items-center gap-4">
+                         <label for="initialX" class="font-medium whitespace-nowrap">初始位置 \(x_0\):</label>
+                         <input type="range" id="initialX" min="10" max="250" value="150" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                         <span id="initialXValue" class="font-mono text-lg p-2 bg-gray-100 rounded-md w-20 text-center">150</span>
+                     </div>
+                </div>
+
+                <div class="flex justify-center items-center gap-4 pt-4 mt-4 border-t">
+                     <button id="releaseBtn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-transform transform hover:scale-105">
+                         釋放
+                     </button>
+                     <button id="pauseBtn" class="px-6 py-3 bg-yellow-500 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-75 transition-transform transform hover:scale-105" disabled>
+                         暫停
+                     </button>
+                     <button id="resetBtn" class="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-transform transform hover:scale-105">
+                         重設
+                     </button>
+                 </div>
+
+                <h3 class="text-xl font-bold mt-6 mb-4 border-b pb-2">即時參數</h3>
+                <div class="space-y-3 text-lg">
+                    <p>時間 (\(t\)): <span id="timeDisplay" class="font-mono float-right bg-gray-100 px-2 rounded">0.00 s</span></p>
+                    <p>位置 (\(x\)): <span id="positionDisplay" class="font-mono float-right bg-gray-100 px-2 rounded">0.0 m</span></p>
+                    <p>速度 (\(v\)): <span id="velocityDisplay" class="font-mono float-right bg-gray-100 px-2 rounded">0.0 m/s</span></p>
+                    <p>加速度 (\(a\)): <span id="accelerationDisplay" class="font-mono float-right bg-gray-100 px-2 rounded">0.0 m/s²</span></p>
+                </div>
+
+                <h3 class="text-xl font-bold mt-6 mb-4 border-b pb-2">固定參數</h3>
+                 <div class="space-y-3 text-lg">
+                      <p>固定質量 (\(M\)): <span class="font-mono float-right">\(1.0 \times 10^{14}\) kg</span></p>
+                      <p>固定距離 (\(d\)): <span class="font-mono float-right">50 m</span></p>
+                      <p>重力常數 (\(G\)): <span class="font-mono float-right text-sm">\(6.67 \times 10^{-11}\)</span></p>
+                 </div>
+            </div>
+            <div class="lg:col-span-2 lg:order-1 bg-white p-6 rounded-xl shadow-lg">
+                 <div class="relative aspect-w-2 aspect-h-1 mb-4">
+                     <canvas id="simulationCanvas" class="w-full h-full bg-gray-900 rounded-lg"></canvas>
+                 </div>
+            </div>
+            <div class="lg:col-span-3 lg:order-3">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-bold mb-4 text-center">運動學圖表</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="chart-container"><canvas id="xtChart"></canvas></div>
+                        <div class="chart-container"><canvas id="vtChart"></canvas></div>
+                        <div class="chart-container"><canvas id="atChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 lg:order-4">
+                 <div class="info-card">
+                     <h2 class="text-2xl md:text-3xl font-bold text-center mb-6">物理情境分析</h2>
+                     <div class="grid md:grid-cols-3 gap-6">
+                          <div class="info-card">
+                              <h3 class="text-xl font-semibold mb-3 text-blue-700">情況一：\(x \gg d\) (遠距離)</h3>
+                              <p class="mb-4">當質點 C 的初始位置 \(x\) 遠大於兩個固定質點的間距 \(d\) 時，從 C 的視角看，兩個質量 \(M\) 幾乎重疊在原點。</p>
+                              <p class="mb-4">因此，系統的行為近似於一個質量為 \(2M\) 的單一質點在原點吸引質量 m。其加速度近似為：</p>
+                              $$ a \approx - \frac{2GM}{x^2} $$
+                              <p class="mt-4">這是一個平方反比關係，類似於單星系統的重力。物體會被拉向原點，但不會進行簡諧運動。</p>
+                          </div>
+
+                          <div class="info-card">
+                              <h3 class="text-xl font-semibold mb-3 text-green-700">情況二：\(x \ll d\) (近距離)</h3>
+                              <p class="mb-4">當質點 C 的位置 \(x\) 遠小於 \(d\) 時，我們可以對加速度公式進行近似。此時，質點 C 的運動近似為簡諧運動 (S.H.M.)。</p>
+                              <p class="mb-4">加速度與位移 \(x\) 成正比，方向相反，可表示為 \(a \approx -kx\)。加速度公式簡化為：</p>
+                              $$ a \approx - \left( \frac{2GM}{d^3} \right) x $$
+                              <p class="mt-4">此運動的週期為：</p>
+                              $$ T = \frac{2\pi}{\omega} = \pi d \sqrt{\frac{2d}{GM}} $$
+                          </div>
+
+                          <div class="info-card">
+                              <h3 class="text-xl font-semibold mb-3 text-purple-700">情況三：一般解</h3>
+                              <p class="mb-4">在一般情況下，沒有簡單的近似。質點 C 所受的淨力使其產生朝向原點的加速度，其精確值為：</p>
+                              $$ a = - \frac{2GMx}{(x^2 + d^2)^{3/2}} $$
+                              <p class="mt-4">這個運動是週期性的振盪，但不是嚴格的簡諧運動（除非 \(x\) 非常小）。其運動週期和振幅都與初始釋放位置 \(x_0\) 有關。本模擬正是使用此完整公式進行數值計算。</p>
+                          </div>
+                      </div>
+                 </div>
+            </div>
+            </main>
+    </div>
+
+    <script>
+        // --- DOM 元素獲取 ---
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        const initialXSlider = document.getElementById('initialX');
+        const initialXValue = document.getElementById('initialXValue');
+        const releaseBtn = document.getElementById('releaseBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        const timeDisplay = document.getElementById('timeDisplay');
+        const positionDisplay = document.getElementById('positionDisplay');
+        const velocityDisplay = document.getElementById('velocityDisplay');
+        const accelerationDisplay = document.getElementById('accelerationDisplay');
+
+        // --- 物理常數與模擬參數 ---
+        const G = 6.67430e-11; // 重力常數
+        const M = 1.0e14;      // 固定質量
+        const d = 50;          // y軸上的距離
+        let initialX = parseFloat(initialXSlider.value); // 初始位置
+        
+        let x, v, a, t; // 位置, 速度, 加速度, 時間
+        let animationId;
+        let isPaused = false;
+        let isRunning = false;
+        
+        const dt = 0.001; // 時間步長
+
+        // --- 圖表數據 ---
+        let chartData = { labels: [], x: [], v: [], a: [] };
+
+        // --- Chart.js 初始化 ---
+        const chartOptions = (title, unit) => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: true, text: title, color: '#333', font: { size: 16 } },
+                legend: { display: false }
+            },
+            scales: {
+                x: { title: { display: true, text: '時間 (s)' }, ticks: { color: '#666' } },
+                y: { title: { display: true, text: `${title.split(' ')[0]} (${unit})` }, ticks: { color: '#666' } }
+            },
+            elements: {
+                point: { radius: 0 },
+                line: { borderWidth: 2 }
+            },
+            animation: { duration: 0 }
+        });
+
+        const xtChart = new Chart(document.getElementById('xtChart'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: '位置', data: [], borderColor: 'rgb(59, 130, 246)' }] },
+            options: chartOptions('位置 vs. 時間', 'm')
+        });
+        const vtChart = new Chart(document.getElementById('vtChart'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: '速度', data: [], borderColor: 'rgb(34, 197, 94)' }] },
+            options: chartOptions('速度 vs. 時間', 'm/s')
+        });
+        const atChart = new Chart(document.getElementById('atChart'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: '加速度', data: [], borderColor: 'rgb(239, 68, 68)' }] },
+            options: chartOptions('加速度 vs. 時間', 'm/s²')
+        });
+
+
+        // --- 核心功能 ---
+        function setCanvasSize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
+        function resetSimulation() {
+            cancelAnimationFrame(animationId);
+            isRunning = false;
+            isPaused = false;
+            
+            x = initialX;
+            v = 0;
+            t = 0;
+            a = calculateAcceleration(x);
+
+            chartData = { labels: [], x: [], v: [], a: [] };
+            updateAllCharts();
+
+            pauseBtn.textContent = '暫停';
+            releaseBtn.disabled = false;
+            pauseBtn.disabled = true;
+            initialXSlider.disabled = false;
+
+            draw();
+            updateDisplays();
+        }
+
+        function calculateAcceleration(currentX) {
+            if (currentX === 0) return 0;
+            const numerator = -2 * G * M * currentX;
+            const denominator = Math.pow(currentX * currentX + d * d, 1.5);
+            return numerator / denominator;
+        }
+
+        function animate() {
+            if (isPaused || !isRunning) return;
+
+            for (let i = 0; i < 100; i++) {
+                const old_a = a;
+                x = x + v * dt + 0.5 * old_a * dt * dt;
+                a = calculateAcceleration(x);
+                v = v + 0.5 * (old_a + a) * dt;
+                t += dt;
+            }
+
+            chartData.labels.push(t.toFixed(2));
+            chartData.x.push(x.toFixed(2));
+            chartData.v.push(v.toFixed(2));
+            chartData.a.push(a.toFixed(2));
+            
+            const maxDataPoints = 500;
+            if(chartData.labels.length > maxDataPoints) {
+                chartData.labels.shift();
+                chartData.x.shift();
+                chartData.v.shift();
+                chartData.a.shift();
+            }
+            
+            if (Math.floor(t / (dt*100)) % 10 === 0) {
+                 updateAllCharts();
+            }
+
+            draw();
+            updateDisplays();
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function draw() {
+            const width = canvas.clientWidth;
+            const height = canvas.clientHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Use canvas.width/height for high DPR
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            ctx.strokeStyle = '#4a5568';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(width, centerY);
+            ctx.moveTo(centerX, 0);
+            ctx.lineTo(centerX, height);
+            ctx.stroke();
+            ctx.fillStyle = '#9ca3af';
+            ctx.font = '12px Arial';
+            ctx.fillText('x', width - 10, centerY - 10);
+            ctx.fillText('y', centerX + 10, 10);
+
+            const massMSize = 10;
+            const d_scaled = d * 0.8;
+            
+            ctx.fillStyle = 'rgb(250, 100, 100)';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY - d_scaled, massMSize, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY + d_scaled, massMSize, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('M', centerX, centerY - d_scaled);
+            ctx.fillText('M', centerX, centerY + d_scaled);
+
+            const massmSize = 7;
+            const x_scaled = x;
+            ctx.fillStyle = 'rgb(100, 150, 255)';
+            ctx.beginPath();
+            ctx.arc(centerX + x_scaled, centerY, massmSize, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.fillText('m', centerX + x_scaled, centerY);
+        }
+        
+        function updateDisplays() {
+            timeDisplay.textContent = `${t.toFixed(2)} s`;
+            positionDisplay.textContent = `${x.toFixed(2)} m`;
+            velocityDisplay.textContent = `${v.toFixed(2)} m/s`;
+            accelerationDisplay.textContent = `${a.toFixed(2)} m/s²`;
+        }
+
+        function updateAllCharts() {
+            xtChart.data.labels = chartData.labels;
+            xtChart.data.datasets[0].data = chartData.x;
+            xtChart.update('none');
+
+            vtChart.data.labels = chartData.labels;
+            vtChart.data.datasets[0].data = chartData.v;
+            vtChart.update('none');
+
+            atChart.data.labels = chartData.labels;
+            atChart.data.datasets[0].data = chartData.a;
+            atChart.update('none');
+        }
+
+        // --- 事件監聽器 ---
+        initialXSlider.addEventListener('input', (e) => {
+            initialX = parseFloat(e.target.value);
+            initialXValue.textContent = initialX;
+            if (!isRunning) {
+                resetSimulation();
+            }
+        });
+
+        releaseBtn.addEventListener('click', () => {
+            if (isRunning) return;
+            
+            isRunning = true;
+            isPaused = false;
+            
+            releaseBtn.disabled = true;
+            pauseBtn.disabled = false;
+            initialXSlider.disabled = true;
+            
+            animate();
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            if (!isRunning) return;
+            isPaused = !isPaused;
+            pauseBtn.textContent = isPaused ? '繼續' : '暫停';
+            if (!isPaused) {
+                animate();
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            resetSimulation();
+        });
+        
+        window.addEventListener('resize', () => {
+            setCanvasSize();
+            draw(); // Redraw immediately on resize
+        });
+
+        // --- 初始設置 ---
+        window.onload = () => {
+            setCanvasSize();
+            resetSimulation();
+        };
+
+    </script>
+    
+    </body>
+</html>
+<script type="text/javascript">
+  // 禁用右鍵選單
+  document.addEventListener('contextmenu', event => event.preventDefault());
+
+  // 禁用文字選取
+  document.addEventListener('selectstart', event => event.preventDefault());
+
+  // 禁用複製快捷鍵 (Ctrl+C / Cmd+C)
+  document.addEventListener('copy', event => {
+    event.clipboardData.setData('text/plain', '本網站內容受版權保護，不允許複製。');
+    event.preventDefault();
+  });
+</script>
+
+<style>
+  /* 讓內文無法被選取 (視覺上) */
+  body, html {
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
+    user-select: none; /* Standard syntax */
+  }
+</style>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卡文迪西扭秤實驗模擬 (淺色版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.151.3/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.151.3/examples/jsm/"
+        }
+    }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            overflow: hidden; /* Prevent scrolling of the whole page */
+        }
+        .label-text {
+            font-size: 0.9rem;
+            color: #4b5563; /* gray-600 */
+        }
+        .value-text {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #111827; /* gray-900 */
+            min-width: 80px;
+            text-align: right;
+        }
+        .info-card {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid #e5e7eb; /* border-gray-200 */
+        }
+        /* Custom scrollbar for info panel */
+        .info-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .info-panel::-webkit-scrollbar-track {
+            background: #f1f5f9; /* slate-100 */
+        }
+        .info-panel::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* slate-400 */
+            border-radius: 4px;
+        }
+        .info-panel::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* slate-500 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-gray-800">
+
+    <div class="flex flex-col lg:flex-row w-screen h-screen">
+        
+        <div class="info-panel lg:w-2/5 w-full h-1/2 lg:h-full p-4 md:p-6 overflow-y-auto">
+            <header class="text-center mb-6">
+                <h1 class="text-3xl md:text-4xl font-bold text-cyan-700">卡文迪西扭秤實驗</h1>
+                <p class="text-lg text-gray-600 mt-2">一個「秤量地球」的精妙設計</p>
+            </header>
+
+            <div class="space-y-6 max-w-2xl mx-auto">
+                <div class="info-card rounded-xl p-6 shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 border-b border-gray-300 pb-2 text-cyan-800">實驗參數設定</h2>
+                    
+                    <div class="mb-4">
+                        <label for="large-mass-slider" class="block mb-2 font-medium text-gray-700">大球質量 (\(M\))</label>
+                        <div class="flex items-center space-x-4">
+                            <input id="large-mass-slider" type="range" min="1" max="15" value="10" step="0.1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                            <span id="large-mass-value" class="value-text">10.0 kg</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="small-mass-slider" class="block mb-2 font-medium text-gray-700">小球質量 (\(m\))</label>
+                        <div class="flex items-center space-x-4">
+                            <input id="small-mass-slider" type="range" min="0.01" max="0.1" value="0.05" step="0.001" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                            <span id="small-mass-value" class="value-text">0.050 kg</span>
+                        </div>
+                    </div>
+                     <button id="reset-button" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">重置實驗</button>
+                </div>
+
+                <div class="info-card rounded-xl p-6 shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 border-b border-gray-300 pb-2 text-cyan-800">測量結果</h2>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="label-text">光點偏移量 (\(\Delta x\)):</span>
+                            <span id="deflection-value" class="value-text text-orange-600">0.0 mm</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="label-text">扭轉角 (\(\theta\)):</span>
+                            <span id="angle-value" class="value-text">0.0°</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="label-text">計算出的重力常數 (\(G\)):</span>
+                            <span id="g-value" class="value-text">0.00e-11</span>
+                        </div>
+                         <div class="pt-3 mt-3 border-t border-gray-200">
+                            <p class="text-sm text-gray-500">公認值 \(G \approx 6.674 \times 10^{-11} \, \text{N·m}^2/\text{kg}^2\)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-card rounded-xl p-6 shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 border-b border-gray-300 pb-2 text-cyan-800">實驗原理說明</h2>
+                    <div class="space-y-4 text-gray-700 leading-relaxed">
+                        <p>1798年，英國科學家亨利·卡文迪西（Henry Cavendish）設計了這個實驗，首次精確測量了兩個物體間的萬有引力，並藉此計算出地球的密度與質量。這也是人類第一次能夠在實驗室裡測量到如此微弱的力。</p>
+                        
+                        <h3 class="font-bold text-lg text-cyan-700 mt-4">實驗裝置：</h3>
+                        <p>主要裝置是一個「扭秤」：一根輕質橫桿兩端各有一個小鉛球 (\(m\))，由一根極細的金屬絲（石英絲）懸吊起來。在小球附近放置兩個大的鉛球 (\(M\))。大球對小球的引力會產生一個微小的力矩，使懸絲扭轉。當懸絲的彈性扭轉力矩與萬有引力力矩平衡時，橫桿便會停止轉動。</p>
+                        
+                        <h3 class="font-bold text-lg text-cyan-700 mt-4">光槓桿放大法：</h3>
+                        <p>由於扭轉的角度極小，肉眼難以觀察。卡文迪西巧妙地利用「光槓桿」原理：將一束光線射向固定在懸絲上的小鏡子，再反射到遠處的刻度尺上。當鏡子轉動一個微小的角度 \(\theta\) 時，反射光線會偏轉 \(2\theta\) 的角度，這使得在刻度尺上的光點位移 \(\Delta x\) 被極大地放大，從而可以進行精確測量。</p>
+                        
+                        <h3 class="font-bold text-lg text-cyan-700 mt-4">核心公式與假設</h3>
+                        <p>當達到平衡時，引力力矩等於懸絲的恢復力矩：</p>
+                        $$ \tau_{\text{gravity}} = \tau_{\text{torsion}} \quad \Rightarrow \quad \left( \frac{GMm}{r^2} \right) L = \kappa\theta $$
+                        <p>在此模擬中，我們假設：<br>
+                            扭秤橫桿長度 (\(L\)) = 2.0 m<br>
+                            懸絲扭轉係數 (\(\kappa\)) = \(2.0 \times 10^{-8}\) N·m/rad
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="simulation-container" class="lg:w-3/5 w-full h-1/2 lg:h-full"></div>
+
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- DOM Elements ---
+        const container = document.getElementById('simulation-container');
+        const largeMassSlider = document.getElementById('large-mass-slider');
+        const smallMassSlider = document.getElementById('small-mass-slider');
+        const largeMassValue = document.getElementById('large-mass-value');
+        const smallMassValue = document.getElementById('small-mass-value');
+        const deflectionValue = document.getElementById('deflection-value');
+        const angleValue = document.getElementById('angle-value');
+        const gValue = document.getElementById('g-value');
+        const resetButton = document.getElementById('reset-button');
+
+        // --- Scene Setup ---
+        let scene, camera, renderer, controls;
+        let torsionGroup, largeSphere1, largeSphere2, incidentBeam, reflectedBeam, lightSpot;
+        let lightSource, scale;
+
+        // --- Physics & Simulation Constants ---
+        const G_real = 6.674e-11;
+        const torsionRodLength = 2; // L
+        const torsionWireStiffness = 2e-8; // kappa (N·m/rad), 扭轉係數
+        const distanceSourceToMirror = 3; // D, 光源/尺到鏡子的距離
+        const distanceLargeToSmall = 0.4; // r, 大小球間的水平距離
+        const smallSphereRadius = 0.05;
+        const largeSphereBaseRadius = 0.1;
+        const baseLevelY = 0.6; // Y level for the apparatus base
+
+        let targetAngle = 0; // 目標扭轉角
+        let currentAngle = 0; // 當前扭轉角
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf1f5f9); // slate-100
+            scene.fog = new THREE.Fog(0xf1f5f9, 10, 25);
+
+            // Camera
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera.position.set(0, 2, 5);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 2;
+            controls.maxDistance = 15;
+            controls.target.set(0, baseLevelY, 0);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x64748b, 1.5); // slate-500
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Materials
+            const smallSphereMaterial = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.5, roughness: 0.4 }); // slate-600
+            const largeSphereMaterial = new THREE.MeshStandardMaterial({ color: 0x0e7490, metalness: 0.4, roughness: 0.5 }); // cyan-700
+            const rodMaterial = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.5 }); // slate-500
+            const wireMaterial = new THREE.LineBasicMaterial({ color: 0xca8a04 }); // yellow-600
+            const lightBeamMaterial = new THREE.MeshBasicMaterial({ color: 0xfab040, transparent: true, opacity: 0.6 });
+            const lightSpotMaterial = new THREE.MeshBasicMaterial({ color: 0xf97316 }); // orange-600
+            const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.8 }); // gray-400
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x4b5563 }); // gray-600
+
+            // --- Build the Scene ---
+            
+            // Table
+            const tableGeometry = new THREE.BoxGeometry(7, 0.2, 5);
+            const table = new THREE.Mesh(tableGeometry, tableMaterial);
+            table.position.y = -0.1;
+            scene.add(table);
+
+            // Main apparatus group
+            const apparatus = new THREE.Group();
+            scene.add(apparatus);
+
+            // Torsion Group (small spheres, rod, mirror)
+            torsionGroup = new THREE.Group();
+            torsionGroup.position.y = baseLevelY;
+            apparatus.add(torsionGroup);
+
+            const rodGeometry = new THREE.CylinderGeometry(0.01, 0.01, torsionRodLength, 8);
+            const rod = new THREE.Mesh(rodGeometry, rodMaterial);
+            rod.rotation.z = Math.PI / 2;
+            torsionGroup.add(rod);
+
+            const smallSphereGeometry = new THREE.SphereGeometry(smallSphereRadius, 32, 32);
+            const smallSphere1 = new THREE.Mesh(smallSphereGeometry, smallSphereMaterial);
+            smallSphere1.position.x = -torsionRodLength / 2;
+            torsionGroup.add(smallSphere1);
+
+            const smallSphere2 = new THREE.Mesh(smallSphereGeometry, smallSphereMaterial);
+            smallSphere2.position.x = torsionRodLength / 2;
+            torsionGroup.add(smallSphere2);
+            
+            const mirrorGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.02, 32);
+            const mirror = new THREE.Mesh(mirrorGeometry, new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.1 }));
+            mirror.rotation.x = -Math.PI / 2;
+            torsionGroup.add(mirror);
+
+            const points = [new THREE.Vector3(0, baseLevelY + 1.5, 0), new THREE.Vector3(0, baseLevelY, 0)];
+            const wireGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const wire = new THREE.Line(wireGeometry, wireMaterial);
+            apparatus.add(wire);
+
+            // Large Spheres (M) and their bases
+            const largeSphereGeometry = new THREE.SphereGeometry(1, 32, 32); // Radius will be scaled
+            const baseGeometry = new THREE.CylinderGeometry(0.15, 0.15, baseLevelY, 16);
+
+            largeSphere1 = new THREE.Mesh(largeSphereGeometry, largeSphereMaterial);
+            const base1 = new THREE.Mesh(baseGeometry, baseMaterial);
+            base1.position.set(-torsionRodLength / 2, baseLevelY / 2, distanceLargeToSmall);
+            largeSphere1.position.set(-torsionRodLength / 2, baseLevelY, distanceLargeToSmall);
+            apparatus.add(largeSphere1, base1);
+
+            largeSphere2 = new THREE.Mesh(largeSphereGeometry, largeSphereMaterial);
+            const base2 = new THREE.Mesh(baseGeometry, baseMaterial);
+            base2.position.set(torsionRodLength / 2, baseLevelY / 2, -distanceLargeToSmall);
+            largeSphere2.position.set(torsionRodLength / 2, baseLevelY, -distanceLargeToSmall);
+            apparatus.add(largeSphere2, base2);
+
+            // Light Source
+            const lightSourceGeom = new THREE.CylinderGeometry(0.05, 0.08, 0.2, 16);
+            lightSource = new THREE.Mesh(lightSourceGeom, new THREE.MeshStandardMaterial({color: 0x9ca3af}));
+            lightSource.position.set(-0.7, baseLevelY, distanceSourceToMirror);
+            lightSource.rotation.x = Math.PI / 2;
+            apparatus.add(lightSource);
+            
+            const bulbGeom = new THREE.SphereGeometry(0.04, 16, 16);
+            const bulb = new THREE.Mesh(bulbGeom, new THREE.MeshBasicMaterial({color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 1}));
+            bulb.position.z = -0.1;
+            lightSource.add(bulb);
+
+            // Incident and Reflected Beams
+            const beamGeom = new THREE.TubeGeometry(undefined, 2, 0.005, 8, false);
+            incidentBeam = new THREE.Mesh(beamGeom.clone(), lightBeamMaterial);
+            reflectedBeam = new THREE.Mesh(beamGeom.clone(), lightBeamMaterial);
+            apparatus.add(incidentBeam, reflectedBeam);
+
+            // Scale and Light Spot
+            const scaleGeometry = new THREE.BoxGeometry(2.0, 0.2, 0.02);
+            const scaleTexture = createScaleTexture();
+            const scaleMaterial = new THREE.MeshBasicMaterial({ map: scaleTexture });
+            scale = new THREE.Mesh(scaleGeometry, scaleMaterial);
+            scale.position.set(0.2, baseLevelY, distanceSourceToMirror);
+            apparatus.add(scale);
+
+            const lightSpotGeometry = new THREE.SphereGeometry(0.02, 16, 16);
+            lightSpot = new THREE.Mesh(lightSpotGeometry, lightSpotMaterial);
+            lightSpot.position.z = distanceSourceToMirror + 0.015;
+            apparatus.add(lightSpot);
+
+            // --- Event Listeners ---
+            largeMassSlider.addEventListener('input', onParamsChange);
+            smallMassSlider.addEventListener('input', onParamsChange);
+            resetButton.addEventListener('click', resetSimulation);
+            window.addEventListener('resize', onWindowResize);
+
+            updateCalculations();
+        }
+
+        function createScaleTexture() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 64;
+            
+            ctx.fillStyle = '#cbd5e1'; // slate-300
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = '#1e293b'; // slate-800
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+
+            const range = 75; // mm
+            for (let i = -range; i <= range; i+=5) {
+                const x = canvas.width / 2 + (i / range) * (canvas.width / 2.2);
+                let markHeight = 10;
+                if (i % 25 === 0) markHeight = 25;
+                else if (i % 5 === 0) markHeight = 15;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, canvas.height - 30);
+                ctx.lineTo(x, canvas.height - 30 - markHeight);
+                ctx.lineWidth = (i % 25 === 0) ? 2 : 1;
+                ctx.stroke();
+                
+                if (i % 25 === 0) {
+                    ctx.fillText(i.toString(), x, canvas.height - 10);
+                }
+            }
+            ctx.fillText("0", canvas.width / 2, canvas.height - 10);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function onParamsChange() {
+            updateCalculations();
+        }
+        
+        function resetSimulation() {
+            largeMassSlider.value = 10;
+            smallMassSlider.value = 0.05;
+            updateCalculations();
+        }
+
+        function updateCalculations() {
+            const M = parseFloat(largeMassSlider.value);
+            const m = parseFloat(smallMassSlider.value);
+
+            largeMassValue.textContent = `${M.toFixed(1)} kg`;
+            smallMassValue.textContent = `${m.toFixed(3)} kg`;
+
+            const radiusM = largeSphereBaseRadius * Math.cbrt(M / 10.0);
+            largeSphere1.scale.set(radiusM, radiusM, radiusM);
+            largeSphere2.scale.set(radiusM, radiusM, radiusM);
+            largeSphere1.position.y = baseLevelY;
+            largeSphere2.position.y = baseLevelY;
+
+            const force = G_real * M * m / (distanceLargeToSmall ** 2);
+            const torque = force * torsionRodLength;
+            targetAngle = torque / torsionWireStiffness;
+
+            const S0 = lightSource.position;
+            const P = torsionGroup.position;
+            const deflection = P.distanceTo(S0) * Math.tan(2 * targetAngle);
+            
+            deflectionValue.textContent = `${(deflection * 1000).toFixed(2)} mm`;
+            angleValue.textContent = `${(targetAngle * 180 / Math.PI).toFixed(5)}°`;
+            
+            if (targetAngle > 1e-9) {
+                const measured_G = (torsionWireStiffness * targetAngle * (distanceLargeToSmall ** 2)) / (M * m * torsionRodLength);
+                gValue.textContent = `${(measured_G / 1e-11).toFixed(3)}e-11`;
+            } else {
+                gValue.textContent = `0.000e-11`;
+            }
+        }
+
+        function onWindowResize() {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width === 0 || height === 0) return;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function updateLightBeams() {
+            const sourcePos = lightSource.position;
+            const mirrorPos = torsionGroup.position;
+
+            let path = new THREE.CatmullRomCurve3([sourcePos, mirrorPos]);
+            incidentBeam.geometry.copy(new THREE.TubeGeometry(path, 2, 0.005, 8, false));
+
+            const incidentVec = new THREE.Vector3().subVectors(mirrorPos, sourcePos).normalize();
+            const mirrorNormal = new THREE.Vector3(0, 0, 1);
+            mirrorNormal.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentAngle);
+            const reflectVec = incidentVec.clone().reflect(mirrorNormal);
+
+            const t = (distanceSourceToMirror - mirrorPos.z) / reflectVec.z;
+            const spotPos = new THREE.Vector3().addVectors(mirrorPos, reflectVec.multiplyScalar(t));
+            
+            lightSpot.position.copy(spotPos);
+            lightSpot.position.z += 0.015;
+
+            path = new THREE.CatmullRomCurve3([mirrorPos, spotPos]);
+            reflectedBeam.geometry.copy(new THREE.TubeGeometry(path, 20, 0.005, 8, false));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            controls.update();
+            
+            currentAngle += (targetAngle - currentAngle) * 0.05;
+            torsionGroup.rotation.y = currentAngle;
+
+            updateLightBeams();
+
+            renderer.render(scene, camera);
+        }
+
+        init();
+        animate();
+
+    </script>
+</body>
+</html>
+<script type="text/javascript">
+  // 禁用右鍵選單
+  document.addEventListener('contextmenu', event => event.preventDefault());
+
+  // 禁用文字選取
+  document.addEventListener('selectstart', event => event.preventDefault());
+
+  // 禁用複製快捷鍵 (Ctrl+C / Cmd+C)
+  document.addEventListener('copy', event => {
+    event.clipboardData.setData('text/plain', '本網站內容受版權保護，不允許複製。');
+    event.preventDefault();
+  });
+</script>
+
+<style>
+  /* 讓內文無法被選取 (視覺上) */
+  body, html {
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
+    user-select: none; /* Standard syntax */
+  }
+</style>

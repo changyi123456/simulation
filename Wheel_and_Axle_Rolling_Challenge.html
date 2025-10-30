@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>線軸物理模擬</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- MathJax Script and Configuration -->
+    <script>
+        window.MathJax = {
+          tex: {
+            inlineMath: [['\\(', '\\)']],
+            displayMath: [['\\[', '\\]']]
+          },
+          svg: {
+            fontCache: 'global'
+          }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            overscroll-behavior: none;
+        }
+        .slider-container {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db;
+            border-radius: 9999px;
+            outline: none;
+            opacity: 0.9;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .explanation-content h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        .explanation-content h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+        .explanation-content p, .explanation-content ul {
+            line-height: 1.75;
+            margin-bottom: 1rem;
+        }
+        .explanation-content ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+        }
+        .explanation-content code {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            padding: 0.2em 0.4em;
+            margin: 0;
+            font-size: 0.9em;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl">
+        <!-- Simulation Block -->
+        <div class="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6">
+            <h1 class="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">線軸物理模擬</h1>
+
+            <!-- Canvas for Simulation -->
+            <div class="bg-gray-200 rounded-lg overflow-hidden relative mb-4">
+                <canvas id="physicsCanvas"></canvas>
+                <div id="status" class="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-sm px-3 py-1 rounded-full font-semibold">
+                    狀態: 已暫停
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 class="font-bold mb-3 text-lg">物理參數</h3>
+                    <div class="space-y-4">
+                        <div class="slider-container"><label for="forceSlider" class="font-medium text-sm">拉力 F</label><input type="range" id="forceSlider" min="0" max="15" value="5" step="0.1"><span id="forceValue" class="font-mono text-sm w-12 text-right">5.0 N</span></div>
+                        <div class="slider-container"><label for="angleSlider" class="font-medium text-sm">角度 \(\theta\)</label><input type="range" id="angleSlider" min="0" max="90" value="30" step="1"><span id="angleValue" class="font-mono text-sm w-12 text-right">30°</span></div>
+                        <div class="slider-container"><label for="frictionSlider" class="font-medium text-sm">靜摩擦係數 \(\mu_s\)</label><input type="range" id="frictionSlider" min="0" max="1.0" value="0.5" step="0.01"><span id="frictionValue" class="font-mono text-sm w-12 text-right">0.50</span></div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 class="font-bold mb-3 text-lg">線軸屬性</h3>
+                    <div class="space-y-4">
+                        <div class="slider-container"><label for="rSlider" class="font-medium text-sm">內半徑 r</label><input type="range" id="rSlider" min="10" max="45" value="25" step="1"><span id="rValue" class="font-mono text-sm w-12 text-right">25 px</span></div>
+                        <div class="slider-container"><label for="RSlider" class="font-medium text-sm">外半徑 R</label><input type="range" id="RSlider" min="50" max="80" value="60" step="1"><span id="RValue" class="font-mono text-sm w-12 text-right">60 px</span></div>
+                        <div class="flex space-x-2">
+                            <button id="startButton" class="w-1/2 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">啟動</button>
+                            <button id="resetButton" class="w-1/2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">重設</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Explanation Block -->
+        <div class="bg-white rounded-xl shadow-lg p-6 sm:p-8 explanation-content">
+            <h3>線軸物理原理詳解</h3>
+            <p>這個模擬展現了一個看似簡單卻違反直覺的物理現象：<strong>拉動一個線軸（或溜溜球），它有時會朝你滾過來，有時卻會離你而去，這完全取決於你拉動的角度！</strong></p>
+            <p>以下是其背後詳細的物理分析。</p>
+            
+            <h4>1. 關鍵概念</h4>
+            <p>為了解析這個問題，我們需要運用牛頓運動定律的平移和轉動形式：</p>
+            <ul>
+                <li><strong>平移動力學</strong>: \(\sum \vec{F} = m\vec{a}\) (合力等於質量乘以加速度)</li>
+                <li><strong>轉動力學</strong>: \(\sum \vec{\tau} = I\vec{\alpha}\) (合力矩等於轉動慣量乘以角加速度)</li>
+                <li><strong>摩擦力</strong>:
+                    <ul>
+                        <li><strong>靜摩擦力 (\(f_s\))</strong>: 阻止物體開始滑動的力，其大小可變，最大值為 \(f_{s,max} = \mu_s N\)。</li>
+                        <li><strong>動摩擦力 (\(f_k\))</strong>: 物體滑動時受到的力，大小固定為 \(f_k = \mu_k N\)。</li>
+                    </ul>
+                </li>
+                <li><strong>滾動而不滑動的條件</strong>: 當物體純滾動時，其質心加速度 \(a\) 和角加速度 \(\alpha\) 之間存在一個鎖定關係：\(a = \alpha R\)。</li>
+            </ul>
+
+            <h4>2. 分析的核心：選擇正確的支點</h4>
+            <p>直接分析所有作用力（拉力、重力、正向力、摩擦力）和力矩會非常複雜，因為摩擦力的大小和方向是未知的。</p>
+            <p>一個更巧妙的方法是選擇一個特殊的點作為計算力矩的 <strong>支點（Pivot）</strong>，這個點就是 <strong>線軸與地面的接觸點 P</strong>。</p>
+            <p>為什麼選擇 P 點？因為重力 \(W\)、地面正向力 \(N\) 和摩擦力 \(f\) 的作用線都通過 P 點，所以它們相對於 P 點的力臂都是零，產生的力矩也都是零！這意味著，<strong>線軸是否有轉動的趨勢，完全只取決於拉力 F 對 P 點產生的力矩 \(\tau_P\)</strong>。</p>
+
+            <h4>3. 決定滾動方向的「臨界條件」</h4>
+            <p>我們來計算拉力 F 對 P 點產生的力矩 \(\tau_P\)。以逆時針為正，力矩為：</p>
+            <p>\[\tau_P = F(r \cos\theta - R \sin\theta)\]</p>
+            <p>（註：此處的 \(\theta\) 是與鉛垂線的夾角，與原始題目定義相同）</p>
+            <p>這個力矩的正負號決定了線軸滾動的趨勢：</p>
+            <ul>
+                <li><strong>當 \(\tau_P > 0\) (即 \(r \cos\theta > R \sin\theta\) 或 \(\tan\theta < r/R\))</strong>: 力矩為 <strong>逆時針</strong>。線軸會傾向於 <strong>向右滾動</strong>（離拉動者而去）。</li>
+                <li><strong>當 \(\tau_P < 0\) (即 \(r \cos\theta < R \sin\theta\) 或 \(\tan\theta > r/R\))</strong>: 力矩為 <strong>順時針</strong>。線軸會傾向於 <strong>向左滾動</strong>（朝拉動者滾來）。</li>
+                <li><strong>當 \(\tau_P = 0\) (即 \(\tan\theta = r/R\))</strong>: 力矩為零，線軸沒有轉動的趨勢。此時拉力的作用線恰好通過地面接觸點P。如果水平拉力 \(F_x\) 足夠大，能夠克服最大靜摩擦力，線軸將會 <strong>原地滑動而不滾動</strong>。</li>
+            </ul>
+
+            <h4>4. 滾動 vs. 滑動</h4>
+            <p>上面的分析決定了「滾動趨勢」，但線軸是純滾動還是會滑動，則取決於摩擦力。</p>
+            <ul>
+                <li><strong>滾動而不滑動 (Rolling without Slipping)</strong>: 當滾動趨勢所 <strong>需要</strong> 的靜摩擦力 \(f_{req}\) 小於地面能提供的最大靜摩擦力 \(f_{s,max}\) 時，線軸就會純滾動。即 \(\left|f_{req}\right| \le \mu_s N\)。</li>
+                <li><strong>滑動 (Sliding)</strong>: 當需要的靜摩擦力 \(f_{req}\) 超過了極限時，靜摩擦力會崩潰，轉變為動摩擦力 \(f_k\)。即 \(\left|f_{req}\right| > \mu_s N\)。此時，線軸的平移加速度 \(a\) 和角加速度 \(\alpha\) 不再滿足 \(a=\alpha R\) 的關係，它們會被各自的合力與合力矩獨立決定，導致線軸在地面上又滾又滑。</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('physicsCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        const forceSlider = document.getElementById('forceSlider');
+        const angleSlider = document.getElementById('angleSlider');
+        const frictionSlider = document.getElementById('frictionSlider');
+        const rSlider = document.getElementById('rSlider');
+        const RSlider = document.getElementById('RSlider');
+        const forceValue = document.getElementById('forceValue');
+        const angleValue = document.getElementById('angleValue');
+        const frictionValue = document.getElementById('frictionValue');
+        const rValue = document.getElementById('rValue');
+        const RValue = document.getElementById('RValue');
+        const startButton = document.getElementById('startButton');
+        const resetButton = document.getElementById('resetButton');
+
+        // --- Simulation Constants & Variables ---
+        const g = 9.8; // m/s^2
+        const spoolMass = 2.0; // kg
+        const mu_k_factor = 0.8; // Kinetic friction is a factor of static friction
+        let scale = 100; // pixels per meter
+
+        let spool = { x: 0, v: 0, a: 0, phi: 0, omega: 0, alpha: 0, R: 0.6, r: 0.25, I: 0 };
+        let F, theta_deg, mu_s, mu_k;
+        let lastTime = 0;
+        let animationFrameId;
+        let isRunning = false;
+
+        // --- Initialization ---
+        function setup() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = 300;
+            
+            resetSimulation();
+            attachEventListeners();
+            gameLoop(performance.now());
+        }
+
+        function resetSimulation() {
+            isRunning = false;
+            spool.x = canvas.width / (2 * scale);
+            spool.v = 0; spool.a = 0;
+            spool.phi = 0; spool.omega = 0; spool.alpha = 0;
+            
+            updateFromSliders();
+            
+            statusDiv.textContent = "狀態: 已暫停";
+            startButton.textContent = '啟動';
+            startButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            startButton.classList.add('bg-green-500', 'hover:bg-green-600');
+            draw(); // Draw initial state
+        }
+
+        function attachEventListeners() {
+            forceSlider.addEventListener('input', () => { updateFromSliders(); forceValue.textContent = `${parseFloat(forceSlider.value).toFixed(1)} N`; });
+            angleSlider.addEventListener('input', () => { updateFromSliders(); angleValue.textContent = `${angleSlider.value}°`; });
+            frictionSlider.addEventListener('input', () => { updateFromSliders(); frictionValue.textContent = `${parseFloat(frictionSlider.value).toFixed(2)}`; });
+            rSlider.addEventListener('input', () => { updateFromSliders(); rValue.textContent = `${rSlider.value} px`; });
+            RSlider.addEventListener('input', () => { updateFromSliders(); RValue.textContent = `${RSlider.value} px`; });
+            resetButton.addEventListener('click', resetSimulation);
+            startButton.addEventListener('click', toggleSimulation);
+            window.addEventListener('resize', () => {
+                const container = canvas.parentElement;
+                if (container) {
+                   canvas.width = container.clientWidth;
+                   resetSimulation();
+                }
+            });
+        }
+        
+        function toggleSimulation() {
+            isRunning = !isRunning;
+            if (isRunning) {
+                startButton.textContent = '暫停';
+                startButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+                startButton.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                lastTime = performance.now(); // Prevent time jump
+            } else {
+                startButton.textContent = '啟動';
+                startButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                startButton.classList.add('bg-green-500', 'hover:bg-green-600');
+                statusDiv.textContent = "狀態: 已暫停";
+            }
+        }
+        
+        function stopAndPause(message) {
+            spool.v = 0; spool.a = 0;
+            spool.omega = 0; spool.alpha = 0;
+            isRunning = false;
+            startButton.textContent = '啟動';
+            startButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            startButton.classList.add('bg-green-500', 'hover:bg-green-600');
+            statusDiv.textContent = message;
+        }
+
+        function updateFromSliders() {
+            F = parseFloat(forceSlider.value);
+            theta_deg = parseFloat(angleSlider.value);
+            mu_s = parseFloat(frictionSlider.value);
+            mu_k = mu_s * mu_k_factor;
+            spool.r = parseFloat(rSlider.value) / scale;
+            spool.R = parseFloat(RSlider.value) / scale;
+            spool.I = 0.5 * spoolMass * (spool.R**2 + spool.r**2);
+            if (!isRunning) draw(); // Redraw if paused
+        }
+
+        // --- Physics Calculation ---
+        function updatePhysics(dt) {
+            const theta_rad = theta_deg * Math.PI / 180;
+            const W = spoolMass * g;
+            const Fx = F * Math.sin(theta_rad);
+            const Fy = F * Math.cos(theta_rad);
+
+            const N = W - Fy;
+            if (N <= 0) {
+                statusDiv.textContent = "狀態: 飛起來了！ ";
+                spool.a = Fx / spoolMass;
+                spool.alpha = (-F * spool.r) / spool.I;
+            } else {
+                const I_p = spool.I + spoolMass * spool.R**2;
+                const torque_about_P = F * (spool.r * Math.cos(theta_rad) - spool.R * Math.sin(theta_rad));
+                const alpha_roll = torque_about_P / I_p;
+                const a_roll = alpha_roll * spool.R;
+                const f_req = Fx - spoolMass * a_roll;
+                const f_s_max = mu_s * N;
+
+                let currentStatus = "";
+                if (Math.abs(f_req) <= f_s_max) {
+                    spool.a = a_roll;
+                    spool.alpha = alpha_roll;
+                    if (Math.abs(spool.a) < 1e-3) { currentStatus = "狀態: 靜止不動"; }
+                    else if (spool.a > 0) { currentStatus = "狀態: 向右滾動"; }
+                    else { currentStatus = "狀態: 向左滾動"; }
+                } else {
+                    const slip_direction = -Math.sign(f_req);
+                    const f_k = mu_k * N * slip_direction;
+                    spool.a = (Fx - f_k) / spoolMass;
+                    const torque_about_CM = f_k * spool.R - F * spool.r;
+                    spool.alpha = torque_about_CM / spool.I;
+                    if (spool.a > 0) { currentStatus = "狀態: 向右滑動"; }
+                    else { currentStatus = "狀態: 向左滑動"; }
+                }
+                statusDiv.textContent = currentStatus;
+            }
+            
+            spool.v += spool.a * dt;
+            spool.x += spool.v * dt;
+            spool.omega += spool.alpha * dt;
+            spool.phi += spool.omega * dt;
+
+            // Handle wall collisions
+            const canvasWidthM = canvas.width / scale;
+            const leftBoundary = spool.R;
+            const rightBoundary = canvasWidthM - spool.R;
+            if (spool.x <= leftBoundary) {
+                spool.x = leftBoundary;
+                stopAndPause("狀態: 撞到左牆，已停止");
+            }
+            if (spool.x >= rightBoundary) {
+                spool.x = rightBoundary;
+                stopAndPause("狀態: 撞到右牆，已停止");
+            }
+        }
+
+        // --- Drawing ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const groundY = canvas.height - 50;
+            ctx.fillStyle = '#96a0aa';
+            ctx.fillRect(0, groundY, canvas.width, 50);
+            
+            const spoolX_px = spool.x * scale;
+            const spoolY_px = groundY - spool.R * scale;
+
+            ctx.save();
+            ctx.translate(spoolX_px, spoolY_px);
+            ctx.rotate(spool.phi);
+
+            ctx.fillStyle = 'rgba(107, 114, 128, 0.5)';
+            ctx.beginPath(); ctx.arc(0, 0, spool.R * scale, 0, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = '#4b5563';
+            ctx.beginPath(); ctx.arc(0, 0, spool.r * scale, 0, 2 * Math.PI); ctx.fill();
+            
+            ctx.strokeStyle = '#f3f4f6'; ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                ctx.beginPath(); ctx.moveTo(0, 0);
+                ctx.lineTo(spool.R * scale * Math.cos(i * Math.PI / 2), spool.R * scale * Math.sin(i * Math.PI / 2));
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#374151'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(0, 0, spool.R * scale, 0, 2 * Math.PI); ctx.stroke();
+            ctx.restore();
+
+            const theta_rad = theta_deg * Math.PI / 180;
+            const forceStartX = spoolX_px + Math.cos(spool.phi) * (spool.r * scale);
+            const forceStartY = spoolY_px + Math.sin(spool.phi) * (spool.r * scale);
+            const forceVecLength = Math.min(F * 10, 150);
+            const forceEndX = forceStartX + forceVecLength * Math.sin(theta_rad);
+            const forceEndY = forceStartY - forceVecLength * Math.cos(theta_rad);
+
+            ctx.beginPath(); ctx.moveTo(forceStartX, forceStartY); ctx.lineTo(forceEndX, forceEndY);
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3; ctx.stroke();
+            
+            ctx.save();
+            ctx.translate(forceEndX, forceEndY);
+            ctx.rotate(Math.atan2(forceEndX - forceStartX, forceStartY - forceEndY));
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, -12); ctx.lineTo(6, -12); ctx.closePath(); ctx.fill();
+            ctx.restore();
+        }
+
+        // --- Main Loop ---
+        function gameLoop(timestamp) {
+            if (isRunning) {
+                const dt = (timestamp - lastTime) / 1000;
+                lastTime = timestamp;
+                updatePhysics(dt);
+            }
+            draw();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Start ---
+        setup();
+    </script>
+</body>
+</html>
+<script type="text/javascript">
+  // 禁用右鍵選單
+  document.addEventListener('contextmenu', event => event.preventDefault());
+
+  // 禁用文字選取
+  document.addEventListener('selectstart', event => event.preventDefault());
+
+  // 禁用複製快捷鍵 (Ctrl+C / Cmd+C)
+  document.addEventListener('copy', event => {
+    event.clipboardData.setData('text/plain', '本網站內容受版權保護，不允許複製。');
+    event.preventDefault();
+  });
+</script>
+
+<style>
+  /* 讓內文無法被選取 (視覺上) */
+  body, html {
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
+    user-select: none; /* Standard syntax */
+  }
+</style>

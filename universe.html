@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寰宇時空探索器 - 真實太陽系版</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #000; 
+            font-family: 'Segoe UI', sans-serif; 
+            /* 新增：禁止選取文字與圖片 */
+            user-select: none;
+            -webkit-user-select: none; /* Safari/Chrome */
+            -moz-user-select: none;    /* Firefox */
+            -ms-user-select: none;     /* IE/Edge */
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        /* 修正行動裝置鏡頭問題：不能 display:none，改為透明 */
+        .input_video { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 1px; height: 1px; 
+            opacity: 0; 
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* UI 層 */
+        #ui-layer {
+            position: absolute; pointer-events: none; width: 100%; height: 100%; top: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+            padding: 40px 20px; box-sizing: border-box;
+        }
+
+        .hud-panel {
+            background: rgba(10, 10, 15, 0.8);
+            border-bottom: 2px solid #ffaa00;
+            border-radius: 10px;
+            padding: 20px 40px;
+            text-align: center;
+            backdrop-filter: blur(8px);
+            color: #eee;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.8);
+            transform: translateY(0);
+            transition: transform 0.3s;
+        }
+
+        .scale-title {
+            font-size: 32px; font-weight: 800; color: #fff; margin-bottom: 5px;
+            text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255, 170, 0, 0.8);
+        }
+        .scale-desc { font-size: 14px; color: #aaa; line-height: 1.5; }
+
+        /* 縮放條 */
+        #zoom-gauge {
+            position: absolute; right: 40px; top: 50%; transform: translateY(-50%);
+            height: 50vh; width: 4px; background: rgba(255,255,255,0.1); border-radius: 2px;
+        }
+        #zoom-fill {
+            position: absolute; bottom: 0; width: 100%; height: 0%;
+            background: linear-gradient(to top, #ff4400, #ffaa00);
+            box-shadow: 0 0 15px #ffaa00;
+            transition: height 0.1s linear;
+        }
+        .zoom-tick {
+            position: absolute; left: 15px; font-size: 12px; color: rgba(255,255,255,0.5);
+            transform: translateY(50%); font-family: monospace;
+        }
+
+        /* 模式指示器 */
+        #mode-indicator {
+            position: absolute; top: 20px; left: 20px;
+            padding: 8px 16px; border-radius: 20px;
+            background: rgba(0,0,0,0.6); border: 1px solid #333;
+            color: #888; font-size: 13px; font-weight: bold;
+            transition: all 0.3s;
+        }
+        #mode-indicator.active {
+            border-color: #ffaa00; color: #ffaa00; box-shadow: 0 0 10px rgba(255, 170, 0, 0.3);
+        }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #ffaa00; background: rgba(0,0,0,0.9); padding: 40px; border-radius: 10px; border: 1px solid #ff4400;
+            text-align: center; z-index: 99; font-size: 18px; letter-spacing: 1px;
+        }
+
+        /* 側邊說明面板 */
+        #instruction-panel {
+            position: absolute; top: 20px; right: 20px; width: 260px;
+            background: rgba(10, 15, 30, 0.6); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 170, 0, 0.3); border-radius: 12px;
+            color: #eee; z-index: 50; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #panel-header {
+            padding: 12px 15px; background: rgba(255, 170, 0, 0.1);
+            display: flex; justify-content: space-between; align-items: center;
+            cursor: pointer; user-select: none; font-weight: bold; letter-spacing: 1px;
+            font-size: 14px; color: #ffaa00;
+        }
+        #panel-header:hover { background: rgba(255, 170, 0, 0.2); }
+        #toggle-icon { font-size: 12px; transition: transform 0.3s; }
+        #panel-content { padding: 15px; font-size: 13px; line-height: 1.6; opacity: 1; transition: opacity 0.3s; }
+        #instruction-panel.minimized { width: 140px; height: 42px; background: rgba(10, 15, 30, 0.4); }
+        #instruction-panel.minimized #panel-content { opacity: 0; pointer-events: none; }
+        #instruction-panel.minimized #toggle-icon { transform: rotate(-90deg); }
+        .cmd-item { margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
+        .cmd-item:last-child { border-bottom: none; margin-bottom: 0; }
+        .cmd-title { color: #ffcc00; font-weight: bold; margin-bottom: 2px; display: block; font-size: 14px;}
+        .cmd-desc { color: rgba(255,255,255,0.7); font-size: 12px; }
+
+    </style>
+    
+    <!-- Three.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Post-processing -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.6.1629159505/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">載入 8K 行星紋理中...<br><small style="color:#aaa; font-size:14px; margin-top:10px; display:block;">請允許相機權限 (支援手機/平板)</small></div>
+    
+    <!-- 修正：加上 playsinline 並確保不是 display:none -->
+    <video class="input_video" playsinline></video>
+    <div id="canvas-container"></div>
+    <div id="mode-indicator">等待手勢...</div>
+
+    <div id="zoom-gauge">
+        <div id="zoom-fill"></div>
+        <div class="zoom-tick" style="bottom: 0%">Galaxy</div>
+        <div class="zoom-tick" style="bottom: 50%">Solar System</div>
+        <div class="zoom-tick" style="bottom: 100%">The Sun</div>
+    </div>
+
+    <div id="instruction-panel">
+        <div id="panel-header" onclick="togglePanel()">
+            <span>?? 航行指南</span>
+            <span id="toggle-icon">▼</span>
+        </div>
+        <div id="panel-content">
+            <div class="cmd-item">
+                <span class="cmd-title">??? 單手導航</span>
+                <span class="cmd-desc">像撥動地球儀一樣，旋轉星系或太陽系。</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-title">?? 雙手穿越</span>
+                <span class="cmd-desc">雙手拉開 = 向前推進 (Zoom In)<br>雙手合攏 = 向後退去 (Zoom Out)</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer">
+        <div style="flex:1"></div>
+        <div class="hud-panel">
+            <div class="scale-title" id="scale-title">銀河系 (The Milky Way)</div>
+            <div class="scale-desc" id="scale-desc">
+                探索從銀河到恆星核心的旅程
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- UI 控制 ---
+        function togglePanel() {
+            const panel = document.getElementById('instruction-panel');
+            panel.classList.toggle('minimized');
+        }
+
+        // --- 防止右鍵選單 (新增功能) ---
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        }, false);
+
+        // --- 全域變數 ---
+        let scene, camera, renderer, composer;
+        let rootGroup; 
+        
+        let galaxyGroup, solarSystemGroup, sunDetailGroup;
+        let sunSurfaceMesh, sunCoronaMesh;
+        
+        // 狀態
+        let currentZoom = 0; 
+        let targetZoom = 0;
+        
+        // 手勢控制
+        let prevHandPos = null;
+        let prevPinchCenter = null;
+        let prevPinchDist = 0;
+
+        let panOffset = new THREE.Vector3(0, 0, 0);
+        let targetPan = new THREE.Vector3(0, 0, 0);
+        let rotationQ = new THREE.Quaternion();
+        let targetRotationQ = new THREE.Quaternion();
+
+        const texLoader = new THREE.TextureLoader();
+
+        // --- 初始化 ---
+        function init() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000); 
+            scene.fog = new THREE.FogExp2(0x000000, 0.002);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 3000);
+            camera.position.z = 20;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 優化手機性能
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // --- 後期處理 ---
+            composer = new THREE.EffectComposer(renderer);
+            const renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0.15;
+            bloomPass.strength = 1.2; 
+            bloomPass.radius = 0.8;
+            composer.addPass(bloomPass);
+
+            // 燈光
+            const sunLight = new THREE.PointLight(0xffaa00, 2.5, 2000);
+            sunLight.position.set(0, 0, 0); 
+            scene.add(sunLight);
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+
+            rootGroup = new THREE.Group();
+            scene.add(rootGroup);
+
+            // 建立層級
+            createGalaxyScale();
+            createRealisticSolarSystem(); // 替換為真實版
+            createSunDetailScale();
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        // 1. 銀河系 (Galaxy)
+        function createGalaxyScale() {
+            galaxyGroup = new THREE.Group();
+            
+            const parameters = {
+                count: 15000,
+                size: 0.15,
+                radius: 15,
+                branches: 3,
+                spin: 1,
+                randomness: 0.5,
+                randomnessPower: 3,
+                insideColor: '#ffaa66',
+                outsideColor: '#1b3984'
+            };
+
+            const geom = new THREE.BufferGeometry();
+            const positions = new Float32Array(parameters.count * 3);
+            const colors = new Float32Array(parameters.count * 3);
+            const colorInside = new THREE.Color(parameters.insideColor);
+            const colorOutside = new THREE.Color(parameters.outsideColor);
+
+            for (let i = 0; i < parameters.count; i++) {
+                const i3 = i * 3;
+                const radius = Math.random() * parameters.radius;
+                const spinAngle = radius * parameters.spin;
+                const branchAngle = (i % parameters.branches) / parameters.branches * Math.PI * 2;
+
+                const randomX = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomY = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomZ = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+
+                positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+                positions[i3 + 1] = randomY * 0.5; 
+                positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+
+                const mixedColor = colorInside.clone();
+                mixedColor.lerp(colorOutside, radius / parameters.radius);
+
+                colors[i3] = mixedColor.r;
+                colors[i3 + 1] = mixedColor.g;
+                colors[i3 + 2] = mixedColor.b;
+            }
+
+            geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            const mat = new THREE.PointsMaterial({
+                size: parameters.size,
+                sizeAttenuation: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                vertexColors: true
+            });
+
+            const galaxy = new THREE.Points(geom, mat);
+            galaxyGroup.add(galaxy);
+            
+            const coreGeo = new THREE.SphereGeometry(1, 32, 32);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0xffddaa, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            core.scale.set(1, 0.4, 1);
+            galaxyGroup.add(core);
+
+            rootGroup.add(galaxyGroup);
+        }
+
+        // 2. 真實太陽系 (Realistic Solar System)
+        function createRealisticSolarSystem() {
+            solarSystemGroup = new THREE.Group();
+            
+            // 太陽 (遠景)
+            const sunGeo = new THREE.SphereGeometry(2, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            const sun = new THREE.Mesh(sunGeo, sunMat);
+            // 太陽輝光
+            const sunGlow = new THREE.Mesh(
+                new THREE.SphereGeometry(3.5, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, side: THREE.BackSide })
+            );
+            sun.add(sunGlow);
+            solarSystemGroup.add(sun);
+
+            // 背景動態星空
+            const starGeo = new THREE.BufferGeometry();
+            const starPos = [];
+            for(let i=0; i<3000; i++) {
+                const r = 150 + Math.random() * 200; 
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                starPos.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+            }
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, transparent: true, opacity: 0.6 });
+            const starField = new THREE.Points(starGeo, starMat);
+            starField.userData = { isBackgroundStars: true };
+            solarSystemGroup.add(starField);
+
+            // 八大行星資料 (Realistic Textures)
+            // 距離 (r) 和大小 (size) 為了視覺效果經過縮放，非真實比例
+            const planetsData = [
+                { name: 'Mercury', r: 3.5, size: 0.1, speed: 1.2, tex: 'https://upload.wikimedia.org/wikipedia/commons/3/30/Mercury_in_color_-_Prockter07_centered.jpg' },
+                { name: 'Venus', r: 5.0, size: 0.25, speed: 0.9, tex: 'https://upload.wikimedia.org/wikipedia/commons/0/02/Venus_globe_-_magellan_radar_1.jpg' }, // 雷達圖，因為金星大氣是白的
+                { name: 'Earth', r: 7.0, size: 0.26, speed: 0.7, tex: 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Earthmap1000x500.jpg' },
+                { name: 'Mars', r: 9.0, size: 0.14, speed: 0.6, tex: 'https://upload.wikimedia.org/wikipedia/commons/3/36/Mars_Viking_MDIM21_grad.jpg' },
+                { name: 'Jupiter', r: 13.0, size: 0.8, speed: 0.3, tex: 'https://upload.wikimedia.org/wikipedia/commons/e/e2/Jupiter.jpg' },
+                { name: 'Saturn', r: 17.0, size: 0.7, speed: 0.25, tex: 'https://upload.wikimedia.org/wikipedia/commons/b/b4/Saturn_%28planet%29_large.jpg', hasRing: true },
+                { name: 'Uranus', r: 21.0, size: 0.4, speed: 0.15, tex: 'https://upload.wikimedia.org/wikipedia/commons/3/3d/Uranus2.jpg' },
+                { name: 'Neptune', r: 24.0, size: 0.38, speed: 0.1, tex: 'https://upload.wikimedia.org/wikipedia/commons/5/56/Neptune_Full.jpg' },
+            ];
+
+            planetsData.forEach(p => {
+                // 軌道線
+                const curve = new THREE.EllipseCurve(0, 0, p.r, p.r, 0, 2 * Math.PI, false, 0);
+                const points = curve.getPoints(128);
+                const orbitGeo = new THREE.BufferGeometry().setFromPoints(points);
+                const orbitMat = new THREE.LineBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.3 });
+                const orbit = new THREE.Line(orbitGeo, orbitMat);
+                orbit.rotation.x = Math.PI / 2;
+                solarSystemGroup.add(orbit);
+
+                // 行星本體 (Standard材質受光照影響)
+                const pGeo = new THREE.SphereGeometry(p.size, 32, 32);
+                const tex = texLoader.load(p.tex);
+                const pMat = new THREE.MeshStandardMaterial({ 
+                    map: tex, 
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                const mesh = new THREE.Mesh(pGeo, pMat);
+
+                // 特殊處理：土星環
+                if (p.hasRing) {
+                    const ringGeo = new THREE.RingGeometry(p.size * 1.4, p.size * 2.2, 64);
+                    // 簡單的紋理映射
+                    var pos = ringGeo.attributes.position;
+                    var v3 = new THREE.Vector3();
+                    for (let i = 0; i < pos.count; i++){
+                        v3.fromBufferAttribute(pos, i);
+                        ringGeo.attributes.uv.setXY(i, v3.length() < (p.size * 1.8) ? 0 : 1, 1);
+                    }
+                    
+                    const ringMat = new THREE.MeshBasicMaterial({ 
+                        color: 0xaa9977, 
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    ring.rotation.x = Math.PI / 2;
+                    mesh.add(ring);
+                }
+
+                // 旋轉 Pivot
+                const pivot = new THREE.Group();
+                mesh.position.set(p.r, 0, 0);
+                // 傾斜一點自轉軸
+                mesh.rotation.z = 0.3; 
+                pivot.add(mesh);
+                pivot.userData = { speed: p.speed, mesh: mesh }; // 存下 mesh 以便自轉
+                solarSystemGroup.add(pivot);
+            });
+
+            solarSystemGroup.visible = false;
+            rootGroup.add(solarSystemGroup);
+        }
+
+        // 3. 恆星太陽 (The Sun)
+        function createSunDetailScale() {
+            sunDetailGroup = new THREE.Group();
+            
+            const sunGeo = new THREE.SphereGeometry(5, 64, 64);
+            // 太陽表面
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+            sunSurfaceMesh = new THREE.Mesh(sunGeo, sunMat);
+            sunDetailGroup.add(sunSurfaceMesh);
+
+            // 日冕
+            const coronaGeo = new THREE.SphereGeometry(5.1, 64, 64);
+            const coronaMat = new THREE.MeshBasicMaterial({
+                color: 0xffaa00, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+            });
+            sunCoronaMesh = new THREE.Mesh(coronaGeo, coronaMat);
+            sunDetailGroup.add(sunCoronaMesh);
+
+            // 光暈
+            const glowGeo = new THREE.SphereGeometry(6.5, 64, 64);
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: 0xff2200, transparent: true, opacity: 0.2, side: THREE.BackSide, blending: THREE.AdditiveBlending
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            sunDetailGroup.add(glow);
+
+            // 日珥粒子
+            const particlesGeo = new THREE.BufferGeometry();
+            const particlesPos = [];
+            for(let i=0; i<1000; i++) {
+                const r = 5.2 + Math.random() * 2;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                particlesPos.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+            }
+            particlesGeo.setAttribute('position', new THREE.Float32BufferAttribute(particlesPos, 3));
+            const particlesMat = new THREE.PointsMaterial({
+                color: 0xffff00, size: 0.2, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending
+            });
+            const prominences = new THREE.Points(particlesGeo, particlesMat);
+            prominences.userData = { speed: 0.05 };
+            sunDetailGroup.add(prominences);
+
+            sunDetailGroup.visible = false;
+            rootGroup.add(sunDetailGroup);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 平滑數據
+            currentZoom += (targetZoom - currentZoom) * 0.08;
+            document.getElementById('zoom-fill').style.height = currentZoom + '%';
+
+            panOffset.lerp(targetPan, 0.1);
+            rootGroup.position.copy(panOffset);
+            rootGroup.quaternion.slerp(targetRotationQ, 0.1);
+
+            const time = Date.now() * 0.0005;
+
+            // --- Level 1: Galaxy (0-50) ---
+            if (currentZoom < 50) {
+                galaxyGroup.visible = true;
+                galaxyGroup.rotation.y = time * 0.2;
+                galaxyGroup.rotation.x = Math.PI * 0.1;
+
+                let scale = 1 + currentZoom * 0.08; 
+                if (currentZoom > 30) scale += (currentZoom - 30) * 0.2;
+                galaxyGroup.scale.setScalar(scale);
+
+                let opacity = 1;
+                if(currentZoom > 30) opacity = 1 - (currentZoom - 30) / 20;
+                
+                galaxyGroup.children.forEach(c => { if(c.material) c.material.opacity = opacity; });
+                if(currentZoom < 25) updateHUD("銀河系 (The Milky Way)", "數千億顆恆星匯聚的螺旋星系。");
+            } else {
+                galaxyGroup.visible = false;
+            }
+
+            // --- Level 2: Solar System (40-85) ---
+            if (currentZoom > 40 && currentZoom < 85) {
+                solarSystemGroup.visible = true;
+                
+                solarSystemGroup.children.forEach(c => {
+                    // 行星公轉
+                    if(c.userData.speed) {
+                        c.rotation.y = time * c.userData.speed;
+                        // 行星自轉
+                        if(c.userData.mesh) c.userData.mesh.rotation.y += 0.01;
+                    } 
+                    // 背景星空轉動
+                    else if (c.userData.isBackgroundStars) {
+                        c.rotation.y = -time * 0.02; 
+                        c.rotation.x = Math.sin(time * 0.01) * 0.05;
+                    }
+                });
+
+                let scale = (currentZoom - 40) / 20;
+                solarSystemGroup.scale.setScalar(scale);
+
+                let opacity = 1;
+                if(currentZoom < 50) opacity = (currentZoom - 40) / 10;
+                if(currentZoom > 75) opacity = 1 - (currentZoom - 75) / 10;
+
+                solarSystemGroup.children.forEach(c => {
+                    if(c.type === 'Line') c.material.opacity = opacity * 0.3;
+                    else if(c.userData.isBackgroundStars) c.material.opacity = opacity * 0.6;
+                    else if(c.children.length > 0) { // 行星 Pivot
+                         // 遍歷行星本體和環
+                         c.children.forEach(child => { if(child.material) child.material.opacity = opacity; });
+                    }
+                    else if(c.material) c.material.opacity = opacity;
+                });
+
+                if(currentZoom > 50 && currentZoom < 75) updateHUD("太陽系 (Solar System)", "八大行星繞行太陽的真實軌跡。");
+            } else {
+                solarSystemGroup.visible = false;
+            }
+
+            // --- Level 3: The Sun (75-100) ---
+            if (currentZoom > 75) {
+                sunDetailGroup.visible = true;
+                sunSurfaceMesh.rotation.y = time * 0.1;
+                sunCoronaMesh.rotation.y = -time * 0.15;
+                sunCoronaMesh.rotation.z = time * 0.05;
+
+                let scale = (currentZoom - 75) / 10 * 1.2; 
+                sunDetailGroup.scale.setScalar(scale);
+                sunDetailGroup.children.forEach(c => { if(c.type === 'Points') c.rotation.y += c.userData.speed * 0.1; });
+
+                if(currentZoom > 85) updateHUD("恆星太陽 (The Sun)", "燃燒的電漿球體，生命的能量來源。");
+            } else {
+                sunDetailGroup.visible = false;
+            }
+
+            composer.render();
+        }
+
+        function updateHUD(title, desc) {
+            const t = document.getElementById('scale-title');
+            const d = document.getElementById('scale-desc');
+            if(t.innerText !== title) { t.innerText = title; d.innerHTML = desc; }
+        }
+
+        // --- 手勢控制 ---
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const modeIndicator = document.getElementById('mode-indicator');
+
+        function onResults(results) {
+            document.getElementById('loading').style.display = 'none';
+
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                modeIndicator.innerText = "等待手勢...";
+                modeIndicator.classList.remove('active');
+                prevHandPos = null; prevPinchDist = 0;
+                return;
+            }
+
+            const hands = results.multiHandLandmarks;
+            const numHands = hands.length;
+            modeIndicator.classList.add('active');
+
+            if (numHands === 2) {
+                modeIndicator.innerText = "?? 雙手模式: 穿越時空";
+                const h1 = hands[0][8]; const h2 = hands[1][8];
+                const dist = Math.hypot(h1.x - h2.x, h1.y - h2.y);
+                const cx = (h1.x + h2.x) / 2; const cy = (h1.y + h2.y) / 2;
+
+                if (prevPinchDist > 0) {
+                    const delta = dist - prevPinchDist;
+                    targetZoom += delta * 250; 
+                    targetZoom = Math.max(0, Math.min(100, targetZoom));
+                }
+                prevPinchDist = dist;
+
+                if (prevPinchCenter) {
+                    const dx = cx - prevPinchCenter.x; const dy = cy - prevPinchCenter.y;
+                    targetPan.x -= dx * 20; targetPan.y -= dy * 20;
+                }
+                prevPinchCenter = { x: cx, y: cy };
+                prevHandPos = null;
+            } 
+            else if (numHands === 1) {
+                modeIndicator.innerText = "??? 單手模式: 轉動星系";
+                const h = hands[0][8];
+                if (prevHandPos) {
+                    const dx = h.x - prevHandPos.x; const dy = h.y - prevHandPos.y;
+                    const deltaRotation = new THREE.Quaternion();
+                    deltaRotation.setFromEuler(new THREE.Euler(dy * 3, dx * 3, 0, 'XYZ'));
+                    targetRotationQ.multiplyQuaternions(deltaRotation, targetRotationQ);
+                }
+                prevHandPos = { x: h.x, y: h.y };
+                prevPinchDist = 0; prevPinchCenter = null;
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+        }});
+        hands.setOptions({
+            maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5
+        });
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480, facingMode: 'user'
+        });
+
+        init();
+        cameraUtils.start().catch(e => {
+            console.error(e);
+            document.getElementById('loading').innerHTML = "相機啟動失敗<br>請檢查權限";
+        });
+
+    </script>
+</body>
+</html>

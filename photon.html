@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全尺度物質探索器 - 深空黑特別版</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #000; 
+            font-family: 'Segoe UI', sans-serif; 
+            /* 禁止選取文字與圖片 */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .input_video { display: none; }
+
+        #ui-layer {
+            position: absolute; pointer-events: none; width: 100%; height: 100%; top: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+            padding: 40px 20px; box-sizing: border-box;
+        }
+
+        .hud-top {
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        .mode-badge {
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0; transition: opacity 0.3s;
+        }
+
+        .hud-panel {
+            background: rgba(5, 5, 5, 0.85); /* 更深色的面板背景 */
+            border-top: 2px solid #0ff;
+            border-radius: 10px;
+            padding: 20px 40px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            color: #eee;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            max-width: 600px;
+            transform: translateY(0);
+            transition: transform 0.3s;
+        }
+
+        .scale-title {
+            font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 5px;
+            background: linear-gradient(90deg, #fff, #0ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .scale-desc { font-size: 14px; color: #aaa; line-height: 1.5; }
+
+        /* 縮放條 */
+        #zoom-gauge {
+            position: absolute; right: 30px; top: 50%; transform: translateY(-50%);
+            height: 40vh; width: 4px; background: rgba(255,255,255,0.1);
+        }
+        #zoom-fill {
+            position: absolute; bottom: 0; width: 100%; height: 0%;
+            background: #0ff; box-shadow: 0 0 15px #0ff;
+            transition: height 0.1s linear;
+        }
+        .zoom-tick {
+            position: absolute; left: 10px; font-size: 12px; color: rgba(255,255,255,0.4);
+            transform: translateY(50%);
+        }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #0ff; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 10px; border: 1px solid #0ff;
+            text-align: center; z-index: 99;
+        }
+    </style>
+    <!-- Three.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Three.js Post-processing -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.6.1629159505/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">正在初始化高畫質物質引擎...<br><small>請允許相機權限，載入高畫質貼圖中</small></div>
+    
+    <video class="input_video" playsinline></video>
+    <div id="canvas-container"></div>
+
+    <div id="zoom-gauge">
+        <div id="zoom-fill"></div>
+        <div class="zoom-tick" style="bottom: 0%">Macro</div>
+        <div class="zoom-tick" style="bottom: 33%">Lattice</div>
+        <div class="zoom-tick" style="bottom: 66%">Atom</div>
+        <div class="zoom-tick" style="bottom: 100%">Nucleus</div>
+    </div>
+
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div id="mode-badge" class="mode-badge">待機中</div>
+        </div>
+        <div class="hud-panel">
+            <div class="scale-title" id="scale-title">黃金晶體 (Macro)</div>
+            <div class="scale-desc" id="scale-desc">
+                🖐️ <b>單手</b>：旋轉視角<br>
+                👐 <b>雙手</b>：拉開=進入內部 | 一起移動=平移視角
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 防止右鍵選單 ---
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        }, false);
+
+        // --- 全域變數 ---
+        let scene, camera, renderer, composer;
+        let rootGroup;
+        let envMap;
+        
+        let macroGroup, latticeGroup, atomGroup, nucleusGroup;
+        let electronCloud, electrons = [];
+        
+        let currentZoom = 0;
+        let targetZoom = 0;
+        
+        let prevHandPos = null;
+        let prevPinchCenter = null;
+        let prevPinchDist = 0;
+
+        const SMOOTHING = 0.1;
+        let panOffset = new THREE.Vector3(0, 0, 0);
+        let targetPan = new THREE.Vector3(0, 0, 0);
+        let rotationQ = new THREE.Quaternion();
+        let targetRotationQ = new THREE.Quaternion();
+
+        // --- 初始化 Three.js ---
+        function init() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            
+            // 載入環境貼圖 (CubeMap) 僅用於反射 (Scene.environment)，背景設為全黑
+            const loader = new THREE.CubeTextureLoader();
+            loader.setPath('https://threejs.org/examples/textures/cube/MilkyWay/');
+            envMap = loader.load(['dark-s_px.jpg', 'dark-s_nx.jpg', 'dark-s_py.jpg', 'dark-s_ny.jpg', 'dark-s_pz.jpg', 'dark-s_nz.jpg']);
+            
+            scene.background = new THREE.Color(0x000000); // 改回全黑背景
+            scene.environment = envMap; // 讓材質繼續反射星空，保持金屬質感
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 15;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.physicallyCorrectLights = true;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            container.appendChild(renderer.domElement);
+
+            // --- 後期處理 (Bloom 輝光效果) ---
+            composer = new THREE.EffectComposer(renderer);
+            const renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // 稍微增強 Bloom 強度，讓黑色背景下的能量感更強
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.6, 0.4, 0.85);
+            composer.addPass(bloomPass);
+
+            // 燈光 - 調整為更聚光的舞台效果
+            const ambient = new THREE.AmbientLight(0xffffff, 0.1); // 降低環境光，讓黑色更純粹
+            scene.add(ambient);
+            
+            const sunLight = new THREE.DirectionalLight(0xfff0dd, 2);
+            sunLight.position.set(10, 15, 10);
+            scene.add(sunLight);
+            
+            // 背光輪廓光 (Rim Light)
+            const rimLight = new THREE.SpotLight(0x0088ff, 8, 50, Math.PI/4, 0.5, 1);
+            rimLight.position.set(-10, 5, -15);
+            rimLight.lookAt(0,0,0);
+            scene.add(rimLight);
+
+            rootGroup = new THREE.Group();
+            scene.add(rootGroup);
+
+            createMacroLevel();
+            createLatticeLevel();
+            createAtomLevel();
+            createNucleusLevel();
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        // 1. 宏觀層 (Macro): 真實黃金晶體
+        function createMacroLevel() {
+            macroGroup = new THREE.Group();
+            
+            // PBR 黃金材質
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xffcc00, 
+                metalness: 1.0,
+                roughness: 0.2,
+                envMapIntensity: 1.5, // 增強反射
+                roughnessMap: new THREE.TextureLoader().load('https://threejs.org/examples/textures/roughness_map.jpg'),
+            });
+
+            // 天然晶體幾何
+            const geometry = new THREE.IcosahedronGeometry(4, 1);
+            const positions = geometry.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                const x = positions.getX(i);
+                const y = positions.getY(i);
+                const z = positions.getZ(i);
+                const scale = 1 + (Math.random() - 0.5) * 0.3; 
+                positions.setXYZ(i, x * scale, y * scale, z * scale);
+            }
+            geometry.computeVertexNormals();
+
+            const goldCrystal = new THREE.Mesh(geometry, material);
+            macroGroup.add(goldCrystal);
+            
+            // 微微的能量場
+            const glowGeo = new THREE.IcosahedronGeometry(4.2, 1);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xaa6600, transparent: true, opacity: 0.05, side: THREE.BackSide, blending: THREE.AdditiveBlending });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            macroGroup.add(glow);
+
+            rootGroup.add(macroGroup);
+        }
+
+        // 2. 晶格層 (Lattice): 能量結構
+        function createLatticeLevel() {
+            latticeGroup = new THREE.Group();
+            
+            const atomGeo = new THREE.SphereGeometry(0.4, 32, 32);
+            const atomMat = new THREE.MeshStandardMaterial({
+                color: 0xff8800,
+                emissive: 0xaa4400,
+                emissiveIntensity: 0.8,
+                metalness: 0.8,
+                roughness: 0.1
+            });
+
+            const spacing = 2.0;
+            for(let x=-1; x<=1; x++) {
+                for(let y=-1; y<=1; y++) {
+                    for(let z=-1; z<=1; z++) {
+                        if (x===0 && y===0 && z===0) {
+                            // 中心入口
+                            const coreGeo = new THREE.SphereGeometry(0.3, 32, 32);
+                            const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, blending: THREE.AdditiveBlending });
+                            const core = new THREE.Mesh(coreGeo, coreMat);
+                            latticeGroup.add(core);
+                            continue;
+                        }
+
+                        const mesh = new THREE.Mesh(atomGeo, atomMat);
+                        mesh.position.set(x*spacing, y*spacing, z*spacing);
+                        latticeGroup.add(mesh);
+
+                        if(x<1) createEnergyBond(x*spacing, y*spacing, z*spacing, (x+1)*spacing, y*spacing, z*spacing);
+                        if(y<1) createEnergyBond(x*spacing, y*spacing, z*spacing, x*spacing, (y+1)*spacing, z*spacing);
+                        if(z<1) createEnergyBond(x*spacing, y*spacing, z*spacing, x*spacing, y*spacing, (z+1)*spacing);
+                    }
+                }
+            }
+            latticeGroup.visible = false;
+            rootGroup.add(latticeGroup);
+        }
+
+        function createEnergyBond(x1, y1, z1, x2, y2, z2) {
+            const p1 = new THREE.Vector3(x1, y1, z1);
+            const p2 = new THREE.Vector3(x2, y2, z2);
+            const dist = p1.distanceTo(p2);
+            const geo = new THREE.CylinderGeometry(0.02, 0.02, dist, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+            const mesh = new THREE.Mesh(geo, mat);
+            const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+            mesh.position.copy(mid);
+            mesh.lookAt(p2);
+            mesh.rotateX(Math.PI/2);
+            latticeGroup.add(mesh);
+        }
+
+        // 3. 原子層 (Atom)
+        function createAtomLevel() {
+            atomGroup = new THREE.Group();
+            
+            const orbits = [2.5, 3.5, 4.5];
+            orbits.forEach(r => {
+                const curve = new THREE.EllipseCurve(0, 0, r, r, 0, Math.PI*2, false, 0);
+                const pts = curve.getPoints(128);
+                const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                const mat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+                const line = new THREE.Line(geo, mat);
+                line.rotation.x = Math.random() * Math.PI;
+                line.rotation.y = Math.random() * Math.PI;
+                atomGroup.add(line);
+
+                const eGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                const eMat = new THREE.MeshBasicMaterial({ color: 0xaaffff, blending: THREE.AdditiveBlending });
+                const eMesh = new THREE.Mesh(eGeo, eMat);
+                const pivot = new THREE.Group();
+                pivot.rotation.copy(line.rotation);
+                eMesh.position.x = r;
+                pivot.add(eMesh);
+                pivot.userData = { speed: (Math.random() + 0.5) * 0.05 };
+                atomGroup.add(pivot);
+                electrons.push(pivot);
+            });
+
+            const cloudGeo = new THREE.BufferGeometry();
+            const pos = [];
+            for(let i=0; i<1500; i++) {
+                const r = 2 + Math.random() * 4.5;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2*Math.random()-1);
+                pos.push(r*Math.sin(phi)*Math.cos(theta), r*Math.sin(phi)*Math.sin(theta), r*Math.cos(phi));
+            }
+            cloudGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            const cloudMat = new THREE.PointsMaterial({ color: 0x0066ff, size: 0.08, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending });
+            electronCloud = new THREE.Points(cloudGeo, cloudMat);
+            atomGroup.add(electronCloud);
+
+            atomGroup.visible = false;
+            rootGroup.add(atomGroup);
+        }
+
+        // 4. 原子核層 (Nucleus)
+        function createNucleusLevel() {
+            nucleusGroup = new THREE.Group();
+            
+            const pGeo = new THREE.SphereGeometry(0.25, 32, 32);
+            const nGeo = new THREE.SphereGeometry(0.25, 32, 32);
+            const pMat = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xaa0000, emissiveIntensity: 1.0, roughness: 0.2 });
+            const nMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, emissive: 0x444444, emissiveIntensity: 0.5, roughness: 0.2 });
+
+            for(let i=0; i<20; i++) {
+                const isProton = Math.random() > 0.5;
+                const mesh = new THREE.Mesh(isProton ? pGeo : nGeo, isProton ? pMat : nMat);
+                mesh.position.set((Math.random()-0.5)*1.0, (Math.random()-0.5)*1.0, (Math.random()-0.5)*1.0);
+                nucleusGroup.add(mesh);
+                mesh.userData = { base: mesh.position.clone(), phase: Math.random()*10 };
+            }
+            
+            const glow = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, side: THREE.BackSide })
+            );
+            nucleusGroup.add(glow);
+
+            nucleusGroup.visible = false;
+            rootGroup.add(nucleusGroup);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            currentZoom += (targetZoom - currentZoom) * 0.1;
+            document.getElementById('zoom-fill').style.height = currentZoom + '%';
+
+            panOffset.lerp(targetPan, 0.1);
+            rootGroup.position.copy(panOffset);
+
+            rootGroup.quaternion.slerp(targetRotationQ, 0.1);
+
+            const time = Date.now() * 0.001;
+
+            // --- 視圖邏輯 ---
+            
+            // Level 1: Macro (0 - 35)
+            if (currentZoom < 40) {
+                macroGroup.visible = true;
+                
+                // 【核心修改】縮放邏輯改為位置移動
+                // 當 currentZoom 變大，物體往 Z 軸正向移動 (靠近鏡頭)
+                // 鏡頭 z=15, 物體半徑約 4-5
+                // 我們希望在 Zoom=35 時，物體表面剛好"撞"到鏡頭
+                
+                const moveFactor = Math.min(1, currentZoom / 35);
+                
+                // 慢慢變大
+                macroGroup.scale.setScalar(1 + moveFactor * 0.5);
+                
+                // 關鍵：向前移動，模擬進入表面
+                // 從 Z=0 移動到 Z=10 (這樣表面就會非常靠近 Z=15 的相機)
+                macroGroup.position.z = moveFactor * 10;
+                
+                // 透明度淡出
+                let opacity = 1;
+                if (currentZoom > 25) opacity = 1 - (currentZoom - 25) / 10;
+                
+                macroGroup.children.forEach(c => {
+                     if(c.material && c.material.transparent) {
+                         // 光暈與實體分開處理
+                         const baseOp = c.geometry.type === 'IcosahedronGeometry' ? 0.05 : 1.0;
+                         c.material.opacity = opacity * baseOp;
+                     }
+                });
+                
+                if(currentZoom < 10) updateHUD("黃金晶體 (Macro)", "真實世界的物質，由無數原子緊密堆積而成。");
+            } else {
+                macroGroup.visible = false;
+                macroGroup.position.z = 0; // 重置位置
+            }
+
+            // Level 2: Lattice (30 - 75)
+            if (currentZoom > 30 && currentZoom < 75) {
+                latticeGroup.visible = true;
+                
+                let scale = 0.5 + (currentZoom - 30) / 30;
+                if (scale > 2) scale = 2 + (scale-2)*2;
+                latticeGroup.scale.setScalar(scale);
+                
+                let opacity = 1;
+                if (currentZoom < 40) opacity = (currentZoom - 30) / 10;
+                if (currentZoom > 60) opacity = 1 - (currentZoom - 60) / 15;
+                
+                latticeGroup.children.forEach(c => {
+                    if(c.material) {
+                        c.material.opacity = opacity * (c.material.blending === THREE.AdditiveBlending ? 0.6 : 1);
+                    }
+                });
+
+                if(currentZoom > 40 && currentZoom < 60) updateHUD("晶格結構 (Lattice)", "進入微觀，看見原子整齊排列的晶格構造。");
+            } else {
+                latticeGroup.visible = false;
+            }
+
+            // Level 3: Atom (60 - 95)
+            if (currentZoom > 60 && currentZoom < 98) {
+                atomGroup.visible = true;
+                
+                electrons.forEach(e => {
+                    e.rotation.z += e.userData.speed;
+                    e.rotation.x += e.userData.speed * 0.5;
+                });
+                electronCloud.rotation.y = time * 0.2;
+
+                let scale = 0.2 + (currentZoom - 60) / 20;
+                atomGroup.scale.setScalar(scale);
+
+                let opacity = 1;
+                if (currentZoom < 70) opacity = (currentZoom - 60) / 10;
+                if (currentZoom > 90) opacity = 1 - (currentZoom - 90) / 8;
+                
+                electronCloud.material.opacity = opacity * 0.5;
+                electrons.forEach(e => e.children[0].material.opacity = opacity);
+                atomGroup.children.forEach(c => { if(c.type==='Line') c.material.opacity = opacity * 0.5; });
+
+                if(currentZoom > 70 && currentZoom < 90) updateHUD("單原子 (Atom)", "鎖定單一原子，電子雲在此機率分佈。");
+            } else {
+                atomGroup.visible = false;
+            }
+
+            // Level 4: Nucleus (90 - 100)
+            if (currentZoom > 90) {
+                nucleusGroup.visible = true;
+                
+                nucleusGroup.children.forEach(c => {
+                    if(c.userData.base) {
+                        c.position.x = c.userData.base.x + Math.sin(time*10 + c.userData.phase)*0.08;
+                        c.position.y = c.userData.base.y + Math.cos(time*12 + c.userData.phase)*0.08;
+                        c.position.z = c.userData.base.z + Math.sin(time*14 + c.userData.phase)*0.08;
+                    }
+                });
+                nucleusGroup.rotation.y += 0.005;
+
+                let scale = (currentZoom - 90) / 10 * 3;
+                nucleusGroup.scale.setScalar(scale);
+
+                if(currentZoom > 95) updateHUD("原子核 (Nucleus)", "抵達物質核心，質子與中子在此結合。");
+            } else {
+                nucleusGroup.visible = false;
+            }
+
+            composer.render();
+        }
+
+        function updateHUD(title, desc) {
+            const t = document.getElementById('scale-title');
+            const d = document.getElementById('scale-desc');
+            if(t.innerText !== title) {
+                t.innerText = title;
+                d.innerHTML = desc + `<br><span style="font-size:12px; color:#0ff; margin-top:5px; display:block">手勢操控中...</span>`;
+            }
+        }
+
+        // --- MediaPipe & 手勢邏輯 ---
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const modeBadge = document.getElementById('mode-badge');
+
+        function onResults(results) {
+            document.getElementById('loading').style.display = 'none';
+
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                modeBadge.style.opacity = 0;
+                prevHandPos = null;
+                prevPinchDist = 0;
+                prevPinchCenter = null;
+                return;
+            }
+
+            const hands = results.multiHandLandmarks;
+            const numHands = hands.length;
+
+            modeBadge.style.opacity = 1;
+
+            if (numHands === 2) {
+                modeBadge.innerText = "👐 雙手模式: 縮放 & 平移";
+                modeBadge.style.borderColor = "#0ff";
+
+                const h1 = hands[0][8];
+                const h2 = hands[1][8];
+
+                const dist = Math.hypot(h1.x - h2.x, h1.y - h2.y);
+                
+                if (prevPinchDist > 0) {
+                    const delta = dist - prevPinchDist;
+                    let zoomSpeed = 200; 
+                    targetZoom += delta * zoomSpeed;
+                    targetZoom = Math.max(0, Math.min(100, targetZoom));
+                }
+                prevPinchDist = dist;
+
+                const cx = (h1.x + h2.x) / 2;
+                const cy = (h1.y + h2.y) / 2;
+                
+                if (prevPinchCenter) {
+                    const dx = cx - prevPinchCenter.x;
+                    const dy = cy - prevPinchCenter.y;
+                    
+                    const panSpeed = 15;
+                    targetPan.x -= dx * panSpeed; 
+                    targetPan.y -= dy * panSpeed;
+                }
+                prevPinchCenter = { x: cx, y: cy };
+
+                prevHandPos = null;
+            }
+            
+            else if (numHands === 1) {
+                modeBadge.innerText = "🖐️ 單手模式: 旋轉觀察";
+                modeBadge.style.borderColor = "#ff0";
+
+                const h = hands[0][8];
+                
+                if (prevHandPos) {
+                    const dx = h.x - prevHandPos.x;
+                    const dy = h.y - prevHandPos.y;
+
+                    const rotateSpeed = 4;
+                    
+                    const deltaRotation = new THREE.Quaternion();
+                    deltaRotation.setFromEuler(new THREE.Euler(dy * rotateSpeed, dx * rotateSpeed, 0, 'XYZ'));
+                    
+                    targetRotationQ.multiplyQuaternions(deltaRotation, targetRotationQ);
+                }
+                prevHandPos = { x: h.x, y: h.y };
+
+                prevPinchDist = 0;
+                prevPinchCenter = null;
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'user'
+        });
+
+        init();
+        cameraUtils.start();
+
+    </script>
+</body>
+</html>

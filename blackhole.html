@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>掌中黑洞 - 萬有引力模擬 (Mobile Optimized)</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #050505; 
+            font-family: 'Segoe UI', sans-serif;
+            /* 禁止選取文字與圖片 */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        /* 修正行動裝置鏡頭問題：不能 display:none，改為透明 */
+        .input_video {
+            position: absolute; top: 0; left: 0;
+            width: 1px; height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #4da6ff; font-size: 20px; letter-spacing: 2px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #4da6ff;
+            z-index: 100;
+        }
+        
+        #error-msg {
+            color: #ff4d4d;
+            font-size: 16px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        /* 側邊說明面板 */
+        #instruction-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            background: rgba(20, 20, 30, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            color: #eee;
+            z-index: 50;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        #panel-header {
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            font-weight: bold;
+            letter-spacing: 1px;
+            font-size: 15px;
+        }
+
+        #panel-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #toggle-icon {
+            font-size: 12px;
+            transition: transform 0.3s;
+        }
+
+        #panel-content {
+            padding: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 1;
+            transition: opacity 0.3s;
+        }
+
+        #instruction-panel.minimized {
+            width: 140px;
+            height: 45px;
+            background: rgba(20, 20, 30, 0.3);
+        }
+
+        #instruction-panel.minimized #panel-content {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #instruction-panel.minimized #toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .cmd-item {
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 8px;
+        }
+        .cmd-item:last-child { border-bottom: none; margin-bottom: 0; }
+        .cmd-title { color: #4da6ff; font-weight: bold; margin-bottom: 4px; display: block; }
+        .cmd-desc { color: rgba(255,255,255,0.7); font-size: 13px; }
+
+    </style>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">
+        INITIALIZING GRAVITY ENGINE...<br>
+        <div style="font-size: 14px; color: #aaa; margin-top: 10px;">請允許瀏覽器使用相機權限 (支援手機/平板)</div>
+        <div id="error-msg"></div>
+    </div>
+    
+    <!-- 確保 playsinline 屬性存在 -->
+    <video class="input_video" playsinline></video>
+    
+    <div id="canvas-container"></div>
+    
+    <div id="instruction-panel">
+        <div id="panel-header" onclick="togglePanel()">
+            <span>🚀 操作指南</span>
+            <span id="toggle-icon">▼</span>
+        </div>
+        <div id="panel-content">
+            <div class="cmd-item">
+                <span class="cmd-title">🖐️ 單手操控</span>
+                <span class="cmd-desc">手掌即為重力核心，移動手掌來牽引粒子流。</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-title">👐 雙手張開</span>
+                <span class="cmd-desc">形成「雙星系統」，粒子會在兩手之間產生 8 字形軌道流動。</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-title">🙏 雙手合攏</span>
+                <span class="cmd-desc">融合為「超大質量黑洞」，產生極強吸力並形成吸積盤。</span>
+            </div>
+            <div class="cmd-item">
+                <span style="font-size:12px; color:#aaa;">💡 點擊標題列可收合面板</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 防止右鍵選單 ---
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        }, false);
+
+        // --- UI 控制 ---
+        function togglePanel() {
+            const panel = document.getElementById('instruction-panel');
+            panel.classList.toggle('minimized');
+        }
+
+        // --- 核心變數 ---
+        let scene, camera, renderer, particlesMesh;
+        
+        // 粒子設定
+        const PARTICLE_COUNT = 20000;
+        const positions = new Float32Array(PARTICLE_COUNT * 3);
+        const velocities = new Float32Array(PARTICLE_COUNT * 3);
+        const colors = new Float32Array(PARTICLE_COUNT * 3);
+        const accelerations = new Float32Array(PARTICLE_COUNT * 3);
+        
+        // 物理參數
+        const G_FORCE = 0.5;
+        const MAX_SPEED = 1.5;
+        const FRICTION = 0.98;
+        const EVENT_HORIZON = 1.0;
+        const SOFTENING = 0.5;
+
+        // 手部狀態
+        let handsData = [];
+
+        const PLANE_WIDTH = 40;
+        const PLANE_HEIGHT = 30;
+
+        // --- Three.js 初始化 ---
+        function init() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050505, 0.015); 
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 25;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // 針對行動裝置優化解析度，避免粒子過小
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const geometry = new THREE.BufferGeometry();
+            
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                resetParticle(i, true);
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const sprite = new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/spark1.png');
+            
+            const material = new THREE.PointsMaterial({
+                size: 0.4,
+                map: sprite,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            particlesMesh = new THREE.Points(geometry, material);
+            scene.add(particlesMesh);
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        function resetParticle(i, randomAnywhere = false) {
+            if (randomAnywhere) {
+                positions[i*3] = (Math.random() - 0.5) * 60;
+                positions[i*3+1] = (Math.random() - 0.5) * 40;
+                positions[i*3+2] = (Math.random() - 0.5) * 30;
+            } else {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 35 + Math.random() * 10;
+                positions[i*3] = Math.cos(angle) * radius;
+                positions[i*3+1] = Math.sin(angle) * radius;
+                positions[i*3+2] = (Math.random() - 0.5) * 10;
+            }
+
+            velocities[i*3] = (Math.random() - 0.5) * 0.1;
+            velocities[i*3+1] = (Math.random() - 0.5) * 0.1;
+            velocities[i*3+2] = (Math.random() - 0.5) * 0.1;
+        }
+
+        function updatePhysics() {
+            const gravitySources = handsData.length > 0 ? handsData : [{x:0, y:0, z:0, strength: 0.05}]; 
+
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                const px = positions[i*3];
+                const py = positions[i*3+1];
+                const pz = positions[i*3+2];
+
+                let ax = 0;
+                let ay = 0;
+                let az = 0;
+
+                let closestDist = 9999;
+
+                gravitySources.forEach(source => {
+                    const dx = source.x - px;
+                    const dy = source.y - py;
+                    const dz = source.z - pz;
+                    
+                    const distSq = dx*dx + dy*dy + dz*dz;
+                    const dist = Math.sqrt(distSq);
+                    
+                    if(dist < closestDist) closestDist = dist;
+
+                    const strength = source.strength !== undefined ? source.strength : G_FORCE;
+                    const force = strength / (distSq + SOFTENING);
+
+                    ax += force * dx;
+                    ay += force * dy;
+                    az += force * dz;
+                });
+
+                velocities[i*3]   += ax;
+                velocities[i*3+1] += ay;
+                velocities[i*3+2] += az;
+
+                velocities[i*3]   *= FRICTION;
+                velocities[i*3+1] *= FRICTION;
+                velocities[i*3+2] *= FRICTION;
+
+                const vSq = velocities[i*3]**2 + velocities[i*3+1]**2 + velocities[i*3+2]**2;
+                if(vSq > MAX_SPEED * MAX_SPEED) {
+                    const scale = MAX_SPEED / Math.sqrt(vSq);
+                    velocities[i*3]   *= scale;
+                    velocities[i*3+1] *= scale;
+                    velocities[i*3+2] *= scale;
+                }
+
+                positions[i*3]   += velocities[i*3];
+                positions[i*3+1] += velocities[i*3+1];
+                positions[i*3+2] += velocities[i*3+2];
+
+                const speed = Math.sqrt(vSq);
+                const colorRatio = Math.min(speed / MAX_SPEED, 1);
+                
+                colors[i*3]   = 1.0 - (colorRatio * 0.5); 
+                colors[i*3+1] = 0.3 + (colorRatio * 0.5);
+                colors[i*3+2] = 0.1 + (colorRatio * 0.9);
+
+                if(handsData.length > 0 && closestDist < EVENT_HORIZON) {
+                    resetParticle(i, false);
+                }
+
+                const distFromCenter = Math.sqrt(px*px + py*py + pz*pz);
+                if(distFromCenter > 50) {
+                    resetParticle(i, false);
+                }
+            }
+
+            particlesMesh.geometry.attributes.position.needsUpdate = true;
+            particlesMesh.geometry.attributes.color.needsUpdate = true;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- MediaPipe 處理 ---
+        const videoElement = document.getElementsByClassName('input_video')[0];
+
+        function onResults(results) {
+            document.getElementById('loading').style.display = 'none';
+            // videoElement.style.display = 'block'; // 不需要顯示，已在CSS隱藏
+
+            handsData = []; 
+
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    const p = landmarks[9]; 
+                    
+                    const x = (1 - p.x - 0.5) * PLANE_WIDTH;
+                    const y = (0.5 - p.y) * PLANE_HEIGHT;
+                    
+                    handsData.push({ x: x, y: y, z: 0 });
+                }
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'user' // 強制使用前鏡頭
+        });
+
+        init();
+        
+        cameraUtils.start().catch(err => {
+            console.error("Camera failed:", err);
+            const errorDiv = document.getElementById('error-msg');
+            errorDiv.style.display = 'block';
+            errorDiv.innerHTML = "⚠️ 無法開啟相機<br>請檢查網址列的權限設定，或確認相機未被其他程式佔用。";
+        });
+
+    </script>
+</body>
+</html>

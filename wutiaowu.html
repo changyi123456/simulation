@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>特級咒術師 - 無下限術式模擬</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #000; 
+            font-family: 'Segoe UI', sans-serif; 
+            /* 禁止選取文字與圖片 */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        .input_video { 
+            position: absolute; top: 0; left: 0; 
+            width: 1px; height: 1px; opacity: 0; pointer-events: none; z-index: -1;
+        }
+
+        #ui-layer {
+            position: absolute; pointer-events: none; width: 100%; height: 100%; top: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            padding-bottom: 40px;
+        }
+
+        .hud-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px 30px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .technique-name {
+            font-size: 24px; font-weight: 900; margin-bottom: 5px; letter-spacing: 2px;
+            text-shadow: 0 0 10px currentColor;
+        }
+        
+        .technique-desc { font-size: 14px; color: #aaa; }
+
+        .tech-blue { color: #00aaff; border-color: #00aaff; box-shadow: 0 0 30px rgba(0, 170, 255, 0.4); }
+        .tech-red { color: #ff3300; border-color: #ff3300; box-shadow: 0 0 30px rgba(255, 51, 0, 0.4); }
+        .tech-purple { color: #aa00ff; border-color: #aa00ff; box-shadow: 0 0 50px rgba(170, 0, 255, 0.6); }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #fff; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 10px; border: 1px solid #fff;
+            text-align: center; z-index: 99;
+        }
+
+        #flash-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: white; opacity: 0; pointer-events: none; z-index: 50;
+            transition: opacity 0.1s ease-out;
+        }
+    </style>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Post Processing -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.6.1629159505/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="flash-overlay"></div>
+    <div id="loading">展開領域中...<br><small>請允許相機權限</small></div>
+    <video class="input_video" playsinline></video>
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <div id="hud" class="hud-panel">
+            <div id="tech-title" class="technique-name">無下限咒術</div>
+            <div id="tech-desc" class="technique-desc">
+                🖐️ 張手：引力 | ✊ 握拳：術式順轉/反轉<br>
+                左手=蒼(吸) | 右手=赫(斥) | 雙拳靠近=茈(滅)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 防止右鍵選單 ---
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        }, false);
+
+        // --- 核心變數 ---
+        let scene, camera, renderer, composer;
+        let particles;
+        
+        const TOTAL_PARTICLES = 30000;
+        const AMBIENT_COUNT = 15000;
+        
+        const positions = new Float32Array(TOTAL_PARTICLES * 3);
+        const velocities = new Float32Array(TOTAL_PARTICLES * 3);
+        const colors = new Float32Array(TOTAL_PARTICLES * 3);
+        const originalPositions = new Float32Array(TOTAL_PARTICLES * 3); 
+        const particleState = new Float32Array(TOTAL_PARTICLES); 
+
+        // 術式狀態
+        let handsState = [
+            { active: false, x: 0, y: 0, gesture: 'none' }, // Hand 0 (Left/First)
+            { active: false, x: 0, y: 0, gesture: 'none' }  // Hand 1 (Right/Second)
+        ];
+        
+        let purpleActive = false;
+        let purpleCenter = { x: 0, y: 0 };
+        let purpleRadius = 0;
+        
+        let shakeIntensity = 0;
+        let explosionTime = 0;
+
+        let coreGroupBlue, coreGroupRed, coreGroupPurple;
+
+        const PLANE_WIDTH = 60;
+        const PLANE_HEIGHT = 40;
+        const MERGE_THRESHOLD = 12.0; 
+
+        // --- Three.js 初始化 ---
+        function init() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
+
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // 保持 PixelRatio 以確保在手機上不模糊，但粒子大小會調回 0.3
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+            container.appendChild(renderer.domElement);
+
+            // Bloom Effect
+            composer = new THREE.EffectComposer(renderer);
+            const renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0.1;
+            bloomPass.strength = 2.0; 
+            bloomPass.radius = 0.5;
+            composer.addPass(bloomPass);
+
+            createParticles();
+            createCores();
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        // 程式碼生成圓形發光貼圖
+        function createDiscTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            
+            const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.4, 'rgba(255, 255, 255, 0.5)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 32, 32);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        function createParticles() {
+            const geometry = new THREE.BufferGeometry();
+            
+            for(let i=0; i<TOTAL_PARTICLES; i++) {
+                const x = (Math.random() - 0.5) * 80;
+                const y = (Math.random() - 0.5) * 60;
+                const z = (Math.random() - 0.5) * 40;
+                
+                positions[i*3] = x;
+                positions[i*3+1] = y;
+                positions[i*3+2] = z;
+                originalPositions[i*3] = x;
+                originalPositions[i*3+1] = y;
+                originalPositions[i*3+2] = z;
+
+                if (i < AMBIENT_COUNT) {
+                    // 環境粒子 (白)
+                    colors[i*3] = 1; colors[i*3+1] = 1; colors[i*3+2] = 1;
+                    particleState[i] = 0; // Ambient
+                } else {
+                    // 能量粒子 (預設隱藏)
+                    colors[i*3] = 0; colors[i*3+1] = 0; colors[i*3+2] = 0; 
+                    particleState[i] = 1; // Red Energy
+                }
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const sprite = createDiscTexture();
+            const material = new THREE.PointsMaterial({
+                size: 0.3, // 保持較小尺寸，看起來更精緻
+                map: sprite,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+        }
+
+        function createCores() {
+            function createSpiralCore(color, size) {
+                const group = new THREE.Group();
+                const geo = new THREE.SphereGeometry(size, 32, 32);
+                const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+                const core = new THREE.Mesh(geo, mat);
+                group.add(core);
+
+                // 螺旋光環稍微縮小一點點，避免看起來太胖
+                const ringGeo = new THREE.TorusGeometry(size * 1.5, 0.05, 8, 64);
+                const ringMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending });
+                
+                for(let i=0; i<3; i++) {
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    ring.rotation.x = Math.random() * Math.PI;
+                    ring.rotation.y = Math.random() * Math.PI;
+                    ring.userData = {
+                        rotSpeedX: (Math.random() - 0.5) * 0.15,
+                        rotSpeedY: (Math.random() - 0.5) * 0.15,
+                        rotSpeedZ: (Math.random() - 0.5) * 0.15
+                    };
+                    group.add(ring);
+                }
+                return group;
+            }
+
+            coreGroupBlue = createSpiralCore(0x0088ff, 1);
+            coreGroupBlue.visible = false;
+            scene.add(coreGroupBlue);
+
+            coreGroupRed = createSpiralCore(0xff2200, 1);
+            coreGroupRed.visible = false;
+            scene.add(coreGroupRed);
+
+            coreGroupPurple = createSpiralCore(0xaa00ff, 2);
+            coreGroupPurple.visible = false;
+            scene.add(coreGroupPurple);
+        }
+
+        function updateCoreVisuals() {
+            [coreGroupBlue, coreGroupRed, coreGroupPurple].forEach(group => {
+                if (!group.visible) return;
+                group.rotation.z += 0.01;
+                group.children.forEach((child, index) => {
+                    if (index === 0) return; 
+                    if (child.userData.rotSpeedX) {
+                        child.rotation.x += child.userData.rotSpeedX;
+                        child.rotation.y += child.userData.rotSpeedY;
+                        child.rotation.z += child.userData.rotSpeedZ;
+                    }
+                });
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- 物理模擬核心 ---
+        function updatePhysics() {
+            const positionsArray = particles.geometry.attributes.position.array;
+            const colorsArray = particles.geometry.attributes.color.array;
+
+            // 1. 術式判定
+            let isBlueActive = handsState[0].active && handsState[0].gesture === 'fist';
+            let isRedActive = handsState[1].active && handsState[1].gesture === 'fist';
+            let isSecondHandOpen = handsState[1].active && handsState[1].gesture === 'open';
+            
+            // 2. 虛式・茈 觸發檢查
+            let triggerPurple = false;
+            if (isBlueActive && isRedActive) {
+                const dist = Math.hypot(handsState[0].x - handsState[1].x, handsState[0].y - handsState[1].y);
+                if (dist < MERGE_THRESHOLD) { 
+                    triggerPurple = true;
+                    purpleCenter.x = (handsState[0].x + handsState[1].x) / 2;
+                    purpleCenter.y = (handsState[0].y + handsState[1].y) / 2;
+                }
+            }
+
+            let doExplosion = false; 
+
+            if (triggerPurple) {
+                if (!purpleActive) {
+                    doExplosion = true;
+                    shakeIntensity = 2.5; 
+                    explosionTime = 40;
+                    
+                    const flashEl = document.getElementById('flash-overlay');
+                    flashEl.style.transition = 'none';
+                    flashEl.style.opacity = '1';
+                    setTimeout(() => {
+                        flashEl.style.transition = 'opacity 0.8s ease-out'; 
+                        flashEl.style.opacity = '0';
+                    }, 50);
+                }
+                purpleActive = true;
+                purpleRadius += 0.5;
+            } else {
+                purpleActive = false;
+                purpleRadius = 0;
+            }
+            
+            if (explosionTime > 0) explosionTime--;
+
+            // 3. 更新視覺核心球體
+            coreGroupBlue.visible = false;
+            coreGroupRed.visible = false;
+            coreGroupPurple.visible = false;
+
+            if (purpleActive) {
+                coreGroupPurple.visible = true;
+                coreGroupPurple.position.set(purpleCenter.x, purpleCenter.y, 0);
+                let pulse = 1 + Math.sin(Date.now() * 0.01) * 0.1;
+                if (explosionTime > 30) pulse = 3.5; 
+                else if (explosionTime > 0) pulse = 2.0 + (explosionTime/30);
+                coreGroupPurple.scale.setScalar(2.0 * pulse);
+                updateHUD("虛式・茈 (Hollow Purple)", "虛空質量，吞噬一切", "tech-purple");
+            } else {
+                if (isBlueActive) {
+                    coreGroupBlue.visible = true;
+                    coreGroupBlue.position.set(handsState[0].x, handsState[0].y, 0);
+                    coreGroupBlue.scale.setScalar(1.2);
+                }
+                if (isRedActive) {
+                    coreGroupRed.visible = true;
+                    coreGroupRed.position.set(handsState[1].x, handsState[1].y, 0);
+                    coreGroupRed.scale.setScalar(1.2);
+                }
+
+                if (isBlueActive && isRedActive) {
+                    updateHUD("蒼 & 赫 (Blue & Red)", "靠近以融合為茈", "");
+                } else if (isBlueActive && isSecondHandOpen) {
+                    updateHUD("蒼 (Blue) + 引力場", "雙重引力操作中", "tech-blue");
+                } else if (isBlueActive) {
+                    updateHUD("術式順轉・蒼 (Blue)", "絕對吸引", "tech-blue");
+                } else if (isRedActive) {
+                    updateHUD("術式反轉・赫 (Red)", "絕對排斥 - 能量釋放", "tech-red");
+                } else {
+                    updateHUD("無下限 (Limitless)", "等待術式輸入...", "");
+                }
+            }
+            
+            updateCoreVisuals();
+
+            // 4. 粒子物理計算
+            for(let i=0; i<TOTAL_PARTICLES; i++) {
+                const px = positionsArray[i*3];
+                const py = positionsArray[i*3+1];
+                const pz = positionsArray[i*3+2];
+
+                let vx = velocities[i*3];
+                let vy = velocities[i*3+1];
+                let vz = velocities[i*3+2];
+
+                const ox = originalPositions[i*3];
+                const oy = originalPositions[i*3+1];
+                const oz = originalPositions[i*3+2];
+                const isEnergyParticle = (particleState[i] === 1); 
+
+                // --- 能量粒子生成邏輯 ---
+                if (isEnergyParticle) {
+                    if (purpleActive) {
+                        if (positionsArray[i*3] > 5000) {
+                             positionsArray[i*3] = purpleCenter.x + (Math.random()-0.5)*2;
+                             positionsArray[i*3+1] = purpleCenter.y + (Math.random()-0.5)*2;
+                             positionsArray[i*3+2] = (Math.random()-0.5)*2;
+                        }
+                    } 
+                    else if (!isRedActive) {
+                        colorsArray[i*3] = 0; colorsArray[i*3+1] = 0; colorsArray[i*3+2] = 0;
+                        positionsArray[i*3] = 9999; positionsArray[i*3+1] = 9999; positionsArray[i*3+2] = 9999;
+                        continue; 
+                    } else {
+                        if (positionsArray[i*3] > 5000) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const radius = 3.0 + Math.random() * 2.0; 
+                            
+                            let spawnX, spawnY;
+                            
+                            if (purpleActive) {
+                                spawnX = purpleCenter.x + Math.cos(angle) * radius;
+                                spawnY = purpleCenter.y + Math.sin(angle) * radius;
+                            } else {
+                                spawnX = handsState[1].x + Math.cos(angle) * radius;
+                                spawnY = handsState[1].y + Math.sin(angle) * radius;
+                            }
+
+                            positionsArray[i*3] = spawnX;
+                            positionsArray[i*3+1] = spawnY;
+                            positionsArray[i*3+2] = (Math.random()-0.5) * 2; 
+
+                            colorsArray[i*3] = 1.0; colorsArray[i*3+1] = 0.2; colorsArray[i*3+2] = 0.2;
+                            
+                            vx = 0; vy = 0; vz = 0; 
+                        }
+                    }
+                }
+
+                // --- 物理場應用 ---
+                if (purpleActive) {
+                    const dx = purpleCenter.x - px;
+                    const dy = purpleCenter.y - py;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const dirX = dx / (dist + 0.001);
+                    const dirY = dy / (dist + 0.001);
+
+                    if (doExplosion) {
+                        const blastForce = 250.0 / (dist + 1.0); 
+                        vx -= dirX * blastForce; vy -= dirY * blastForce;
+                        colorsArray[i*3] = 1.0; colorsArray[i*3+1] = 1.0; colorsArray[i*3+2] = 1.0;
+                    } 
+                    else if (explosionTime > 0) {
+                        colorsArray[i*3] = colorsArray[i*3]*0.9 + 0.6*0.1;
+                        colorsArray[i*3+1] = colorsArray[i*3+1]*0.9;
+                        colorsArray[i*3+2] = colorsArray[i*3+2]*0.9 + 1.0*0.1;
+                    }
+                    else if (dist < 8 + purpleRadius) {
+                        vx += (Math.random()-0.5) * 8; vy += (Math.random()-0.5) * 8; vz += (Math.random()-0.5) * 8;
+                        colorsArray[i*3] = 0.6; colorsArray[i*3+1] = 0.0; colorsArray[i*3+2] = 1.0;
+                    } else {
+                        const force = 5.0 / (dist + 0.1);
+                        vx += dirX * force; vy += dirY * force;
+                        colorsArray[i*3] = colorsArray[i*3]*0.9 + 0.6*0.1;
+                        colorsArray[i*3+1] = colorsArray[i*3+1]*0.9;
+                        colorsArray[i*3+2] = colorsArray[i*3+2]*0.9 + 1.0*0.1;
+                    }
+                } 
+                else {
+                    let affected = false;
+                    let influenceBlue = 0;
+
+                    // Hand 0 (Blue)
+                    if (isBlueActive) {
+                        const dx = handsState[0].x - px;
+                        const dy = handsState[0].y - py;
+                        const dist = Math.sqrt(dx*dx + dy*dy) + 0.1;
+                        
+                        const force = 2.0 / dist; 
+                        vx += (dx/dist) * force;
+                        vy += (dy/dist) * force;
+                        influenceBlue = 100.0 / (dist * dist);
+                        affected = true;
+                    } else if (handsState[0].active && handsState[0].gesture === 'open') {
+                        const dx = handsState[0].x - px;
+                        const dy = handsState[0].y - py;
+                        const dist = Math.sqrt(dx*dx + dy*dy) + 0.1;
+                        vx += (dx/dist) * 0.1;
+                        vy += (dy/dist) * 0.1;
+                        affected = true;
+                    }
+
+                    // Hand 1 (Red)
+                    if (isRedActive) {
+                        const dx = handsState[1].x - px;
+                        const dy = handsState[1].y - py;
+                        const dist = Math.sqrt(dx*dx + dy*dy) + 0.1;
+                        
+                        if (dist < 6.0) {
+                            const pushForce = 3.0; 
+                            vx -= (dx/dist) * pushForce;
+                            vy -= (dy/dist) * pushForce;
+                        } 
+                        else if (isEnergyParticle) {
+                            vx -= (dx/dist) * 0.05;
+                            vy -= (dy/dist) * 0.05;
+                        }
+                        
+                        affected = true;
+                    } else if (isSecondHandOpen) {
+                        const dx = handsState[1].x - px;
+                        const dy = handsState[1].y - py;
+                        const dist = Math.sqrt(dx*dx + dy*dy) + 0.1;
+                        vx += (dx/dist) * 0.1;
+                        vy += (dy/dist) * 0.1;
+                        affected = true;
+                    }
+
+                    // --- 顏色與重置 ---
+                    if (isEnergyParticle) {
+                        const distRed = Math.hypot(px - handsState[1].x, py - handsState[1].y);
+                        
+                        if (distRed > 60 || Math.abs(px) > 50) {
+                            positionsArray[i*3] = 9999; 
+                        }
+
+                        if (influenceBlue > 0.2) {
+                            colorsArray[i*3] += (0 - colorsArray[i*3]) * 0.1;
+                            colorsArray[i*3+1] += (0.6 - colorsArray[i*3+1]) * 0.1;
+                            colorsArray[i*3+2] += (1 - colorsArray[i*3+2]) * 0.1;
+                        } else {
+                            colorsArray[i*3] += (1 - colorsArray[i*3]) * 0.2;
+                            colorsArray[i*3+1] += (0.1 - colorsArray[i*3+1]) * 0.2;
+                            colorsArray[i*3+2] += (0.1 - colorsArray[i*3+2]) * 0.2;
+                        }
+                    } 
+                    else if (!affected) {
+                        vx += (ox - px) * 0.02;
+                        vy += (oy - py) * 0.02;
+                        vz += (oz - pz) * 0.02;
+                        colorsArray[i*3] += (1 - colorsArray[i*3]) * 0.05;
+                        colorsArray[i*3+1] += (1 - colorsArray[i*3+1]) * 0.05;
+                        colorsArray[i*3+2] += (1 - colorsArray[i*3+2]) * 0.05;
+                    }
+                }
+
+                const friction = (purpleActive && explosionTime > 0) ? 0.98 : 0.90;
+                vx *= friction; 
+                vy *= friction;
+                vz *= friction;
+
+                positionsArray[i*3] += vx;
+                positionsArray[i*3+1] += vy;
+                positionsArray[i*3+2] += vz;
+
+                velocities[i*3] = vx;
+                velocities[i*3+1] = vy;
+                velocities[i*3+2] = vz;
+            }
+
+            particles.geometry.attributes.position.needsUpdate = true;
+            particles.geometry.attributes.color.needsUpdate = true;
+        }
+
+        function updateHUD(text, desc, className) {
+            const hud = document.getElementById('hud');
+            const title = document.getElementById('tech-title');
+            const d = document.getElementById('tech-desc');
+            
+            if (title.innerText !== text) {
+                title.innerText = text;
+                d.innerHTML = desc;
+                hud.className = "hud-panel " + className;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+            
+            if (shakeIntensity > 0) {
+                camera.position.x = (Math.random() - 0.5) * shakeIntensity;
+                camera.position.y = (Math.random() - 0.5) * shakeIntensity;
+                shakeIntensity *= 0.9;
+                if (shakeIntensity < 0.1) {
+                    shakeIntensity = 0;
+                    camera.position.x = 0;
+                    camera.position.y = 0;
+                }
+            }
+
+            composer.render();
+        }
+
+        const videoElement = document.getElementsByClassName('input_video')[0];
+
+        function detectGesture(landmarks) {
+            const wrist = landmarks[0];
+            const tips = [8, 12, 16, 20]; 
+            let foldedCount = 0;
+            for (let tipIdx of tips) {
+                const tip = landmarks[tipIdx];
+                const dist = Math.hypot(tip.x - wrist.x, tip.y - wrist.y);
+                if (dist < 0.35) { 
+                    foldedCount++;
+                }
+            }
+            if (foldedCount >= 3) return 'fist';
+            else return 'open';
+        }
+
+        function onResults(results) {
+            document.getElementById('loading').style.display = 'none';
+            handsState[0].active = false;
+            handsState[1].active = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for(let i=0; i < results.multiHandLandmarks.length && i < 2; i++) {
+                    const landmarks = results.multiHandLandmarks[i];
+                    const gesture = detectGesture(landmarks);
+                    const point = landmarks[9]; 
+                    const x = (1 - point.x - 0.5) * PLANE_WIDTH; 
+                    const y = (0.5 - point.y) * PLANE_HEIGHT;
+                    handsState[i].active = true;
+                    handsState[i].x = x;
+                    handsState[i].y = y;
+                    handsState[i].gesture = gesture;
+                }
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'user'
+        });
+
+        init();
+        cameraUtils.start().catch(err => {
+            console.error(err);
+            document.getElementById('loading').innerText = "相機啟動失敗";
+        });
+
+    </script>
+</body>
+</html>

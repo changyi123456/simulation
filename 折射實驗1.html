@@ -3,425 +3,428 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>糖水連續折射模擬實驗</title>
+    <title>糖水濃度與折射路徑實驗</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; }
         
-        /* Slider styling */
         input[type=range] {
             -webkit-appearance: none; 
             background: transparent; 
         }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            height: 20px;
-            width: 20px;
+            height: 24px;
+            width: 24px;
             border-radius: 50%;
-            background: #06b6d4; /* Cyan-500 */
+            background: #facc15; /* Yellow-400 */
+            border: 2px solid #fff;
             cursor: pointer;
-            margin-top: -8px; 
-            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+            margin-top: -10px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%;
-            height: 4px;
+            height: 6px;
             cursor: pointer;
             background: #475569;
-            border-radius: 2px;
-        }
-
-        .canvas-card {
-            background-color: #1e293b; /* Slate-800 */
-            border: 1px solid #334155;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 3px;
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col overflow-x-hidden">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-lg sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-cyan-400">🧪 糖水折射實驗室</h1>
-                <p class="text-slate-400 text-xs md:text-sm">探究連續折射現象：光線為何會轉彎？</p>
+    <header class="bg-slate-800 p-4 shadow-lg border-b border-slate-700">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🔦</span>
+                <div>
+                    <h1 class="text-2xl font-bold text-yellow-400">光線折射路徑實驗</h1>
+                    <p class="text-slate-400 text-xs">探討變因：糖水濃度對折射角度的影響</p>
+                </div>
             </div>
-            <div class="mt-2 md:mt-0 flex gap-2">
-                <div class="flex items-center gap-2 text-xs bg-slate-700 px-3 py-1 rounded-full border border-slate-600">
-                    <span class="w-2 h-2 rounded-full bg-yellow-400"></span> 實際光的路徑
-                </div>
-                <div class="flex items-center gap-2 text-xs bg-slate-700 px-3 py-1 rounded-full border border-slate-600">
-                    <span class="w-2 h-2 rounded-full bg-red-500 opacity-50"></span> 眼睛看到的虛像
-                </div>
+            <div class="mt-4 md:mt-0 bg-slate-700/50 px-4 py-2 rounded-lg border border-slate-600">
+                <span class="text-sm text-slate-300">目前介質狀態：</span>
+                <span id="mediumStatus" class="font-bold text-cyan-300 ml-2">純水</span>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-grow p-4 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <main class="flex-grow p-4 md:p-8 max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        <!-- Controls (Left Sidebar) -->
-        <div class="lg:col-span-3 space-y-6">
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <h2 class="text-lg font-bold mb-6 text-cyan-300 flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
-                    實驗參數
+        <!-- Controls (Left) -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Experiment Card -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl select-none">🧪</div>
+                
+                <h2 class="text-xl font-bold mb-6 text-cyan-400 flex items-center gap-2">
+                    1. 調整變因
                 </h2>
 
-                <!-- Sugar Concentration -->
+                <!-- Concentration Slider -->
                 <div class="mb-8">
-                    <label class="block mb-2 text-sm font-bold text-slate-300">糖水濃度差異</label>
-                    <div class="flex justify-between mb-1">
-                        <span class="text-xs text-slate-500">純水 (濃度一樣)</span>
-                        <span class="text-xs text-slate-500">飽和糖水 (濃度差很大)</span>
+                    <label class="flex justify-between items-center mb-2">
+                        <span class="font-bold text-slate-200">糖水濃度</span>
+                        <span id="concDisplay" class="bg-cyan-900 text-cyan-300 px-2 py-1 rounded text-sm font-mono">0%</span>
+                    </label>
+                    <input type="range" id="concSlider" min="0" max="100" value="0" class="w-full">
+                    <div class="flex justify-between mt-2 text-xs text-slate-500">
+                        <span>純水 (稀)</span>
+                        <span>飽和糖水 (濃)</span>
                     </div>
-                    <input type="range" id="gradientSlider" min="0" max="100" value="0" class="w-full">
-                    <div class="mt-2 text-right text-cyan-400 font-mono text-sm" id="gradientVal">0%</div>
-                    <p class="text-xs text-slate-500 mt-2 bg-slate-900/50 p-2 rounded">
-                        濃度越高，水越濃稠，光在裡面跑得越慢。這會讓光線更容易向下彎曲。
-                    </p>
                 </div>
 
-                <!-- Object Position -->
+                <!-- Angle Slider -->
                 <div class="mb-4">
-                    <label class="block mb-2 text-sm font-bold text-slate-300">目標物高度</label>
-                    <input type="range" id="heightSlider" min="10" max="90" value="50" class="w-full">
-                    <div class="flex justify-between mt-1 text-xs text-slate-500">
-                        <span>底部</span>
-                        <span>頂部</span>
+                    <label class="flex justify-between items-center mb-2">
+                        <span class="font-bold text-slate-200">雷射入射角度</span>
+                        <span id="angleDisplay" class="bg-yellow-900 text-yellow-300 px-2 py-1 rounded text-sm font-mono">45°</span>
+                    </label>
+                    <input type="range" id="angleSlider" min="0" max="85" value="45" class="w-full">
+                    <div class="flex justify-between mt-2 text-xs text-slate-500">
+                        <span>垂直入射 (0°)</span>
+                        <span>掠射 (85°)</span>
                     </div>
-                </div>
-
-                <!-- Info Box -->
-                <div class="mt-6 border-t border-slate-700 pt-4">
-                    <h3 class="text-sm font-bold text-slate-400 mb-2">💡 觀察重點</h3>
-                    <ul class="text-xs text-slate-400 space-y-2 list-disc list-inside">
-                        <li>注意看右圖的紅球位置變化。</li>
-                        <li>當濃度差變大時，光線會在水缸內向下彎曲。</li>
-                        <li>但眼睛會覺得光是直直來的，所以物體看起來會<strong>浮起來</strong>。</li>
-                    </ul>
                 </div>
             </div>
+
+            <!-- Theory Card -->
+            <div class="bg-slate-800/50 p-6 rounded-2xl border border-dashed border-slate-600">
+                <h3 class="font-bold text-slate-300 mb-3 text-lg">📝 觀察筆記</h3>
+                <div class="space-y-4 text-sm text-slate-400">
+                    <div class="flex items-start gap-3">
+                        <div class="bg-cyan-900/50 p-2 rounded text-cyan-400 text-xl">🐢</div>
+                        <div>
+                            <p class="font-bold text-cyan-200">濃度越高，阻礙越大</p>
+                            <p>糖分子變多，光在水裡跑得越慢。</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="bg-yellow-900/50 p-2 rounded text-yellow-400 text-xl">📐</div>
+                        <div>
+                            <p class="font-bold text-yellow-200">速度變慢，轉彎更多</p>
+                            <p>當光速變慢時，光線會更用力地向「法線」靠攏，導致折射角變小。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <!-- Visualizations (Right Area) -->
-        <div class="lg:col-span-9 flex flex-col gap-6">
-
-            <!-- 1. Physical View (Side Profile) -->
-            <div class="canvas-card rounded-xl overflow-hidden relative group">
-                <div class="absolute top-0 left-0 bg-slate-900/80 px-4 py-2 text-cyan-300 text-sm font-bold rounded-br-lg border-b border-r border-slate-700 z-10">
-                    1. 實驗桌側面視角 (物理真相)
-                </div>
-                <div class="w-full h-64 md:h-80 relative" id="sideViewContainer">
-                    <canvas id="sideViewCanvas" class="w-full h-full block cursor-crosshair"></canvas>
-                    
-                    <!-- Labels inside canvas area -->
-                    <div class="absolute top-1/2 left-2 transform -translate-y-1/2 text-slate-400 text-xs md:text-sm text-center">
-                        <div class="text-3xl mb-1">👀</div>
-                        觀察者
-                    </div>
-                    <!-- New Gradient Labels (Simplified for Middle School) -->
-                    <div class="absolute top-16 left-1/4 text-slate-400 text-xs text-right pr-2 border-r border-slate-600">
-                        頂部: 濃度低<br>光速較快
-                    </div>
-                    <div id="densityLabel" class="absolute bottom-16 left-1/4 text-cyan-400 text-xs text-right pr-2 border-r border-cyan-600 font-bold" style="opacity: 0; transition: opacity 0.3s;">
-                        底部: 濃度高<br>光速較慢
-                    </div>
-                </div>
+        <!-- Simulation Canvas (Right) -->
+        <div class="lg:col-span-2 bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border-4 border-slate-700 relative">
+            <canvas id="simCanvas" class="w-full h-full block min-h-[400px]"></canvas>
+            
+            <!-- Floating Labels -->
+            <div class="absolute top-4 left-4 bg-black/40 backdrop-blur px-3 py-1 rounded border border-white/10 text-xs text-slate-300">
+                空氣 (光速快)
+            </div>
+            <div class="absolute bottom-4 left-4 bg-cyan-900/40 backdrop-blur px-3 py-1 rounded border border-cyan-500/30 text-xs text-cyan-300">
+                糖水溶液 (光速慢)
             </div>
 
-            <!-- 2. Subjective View (What the eye sees) -->
-            <div class="canvas-card rounded-xl overflow-hidden relative">
-                <div class="absolute top-0 left-0 bg-slate-900/80 px-4 py-2 text-yellow-300 text-sm font-bold rounded-br-lg border-b border-r border-slate-700 z-10">
-                    2. 你的主觀視角 (透過水缸看)
-                </div>
-                <div class="w-full h-64 md:h-80 relative bg-black" id="povContainer">
-                    <canvas id="povCanvas" class="w-full h-full block"></canvas>
-                    
-                    <!-- Overlay Grid Effect for "Looking through glass" -->
-                    <div class="absolute inset-0 pointer-events-none opacity-30" 
-                         style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 20px 20px;">
-                    </div>
-                    <!-- Frame -->
-                    <div class="absolute inset-0 border-[20px] border-slate-800 pointer-events-none shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]"></div>
-                </div>
+            <!-- Protractor Toggle (Optional, usually visible is better) -->
+            <div class="absolute top-4 right-4 flex items-center gap-2">
+                <label class="text-xs text-slate-400 cursor-pointer select-none flex items-center gap-2">
+                    <input type="checkbox" id="showProtractor" checked class="accent-yellow-500">
+                    顯示量角器
+                </label>
             </div>
-
         </div>
 
     </main>
 
+    <footer class="bg-slate-900 text-center p-6 text-slate-500 text-sm">
+        <p>互動模擬教材：光學折射與介質濃度</p>
+    </footer>
+
     <script>
-        // --- Setup ---
-        const sideCanvas = document.getElementById('sideViewCanvas');
-        const povCanvas = document.getElementById('povCanvas');
-        const sideCtx = sideCanvas.getContext('2d');
-        const povCtx = povCanvas.getContext('2d');
-        
-        const gradientSlider = document.getElementById('gradientSlider');
-        const heightSlider = document.getElementById('heightSlider');
-        const gradientVal = document.getElementById('gradientVal');
-        const densityLabel = document.getElementById('densityLabel');
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const concSlider = document.getElementById('concSlider');
+        const angleSlider = document.getElementById('angleSlider');
+        const concDisplay = document.getElementById('concDisplay');
+        const angleDisplay = document.getElementById('angleDisplay');
+        const mediumStatus = document.getElementById('mediumStatus');
+        const showProtractorCb = document.getElementById('showProtractor');
 
         let state = {
-            gradient: 0, // 0 to 100
-            objHeight: 50, // 0 to 100 (percentage from bottom)
+            concentration: 0, // 0-100
+            incidentAngle: 45, // degrees
             time: 0
         };
 
-        // --- Resize Logic ---
+        // Resize
         function resize() {
-            const sideContainer = document.getElementById('sideViewContainer');
-            const povContainer = document.getElementById('povContainer');
-            
-            sideCanvas.width = sideContainer.clientWidth;
-            sideCanvas.height = sideContainer.clientHeight;
-            
-            povCanvas.width = povContainer.clientWidth;
-            povCanvas.height = povContainer.clientHeight;
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
         }
         window.addEventListener('resize', resize);
         resize();
 
-        // --- Interaction ---
-        gradientSlider.addEventListener('input', (e) => {
-            state.gradient = parseInt(e.target.value);
-            gradientVal.innerText = state.gradient + '%';
-            if(densityLabel) {
-                 densityLabel.style.opacity = state.gradient > 20 ? 1 : 0;
-            }
+        // Interaction
+        concSlider.addEventListener('input', (e) => {
+            state.concentration = parseInt(e.target.value);
+            concDisplay.textContent = state.concentration + '%';
+            updateStatus();
         });
-        heightSlider.addEventListener('input', (e) => {
-            state.objHeight = parseInt(e.target.value);
+        angleSlider.addEventListener('input', (e) => {
+            state.incidentAngle = parseInt(e.target.value);
+            angleDisplay.textContent = state.incidentAngle + '°';
         });
 
-        // --- Physics Helpers ---
-        function getN(yNormalized) {
-            const nWater = 1.33;
-            const maxDelta = 0.15 * (state.gradient / 100); 
-            return nWater + maxDelta * yNormalized;
+        function updateStatus() {
+            if (state.concentration === 0) mediumStatus.textContent = "純水 (n ≈ 1.33)";
+            else if (state.concentration < 50) mediumStatus.textContent = "低濃度糖水";
+            else if (state.concentration < 100) mediumStatus.textContent = "高濃度糖水";
+            else mediumStatus.textContent = "飽和糖水 (n ≈ 1.50)";
         }
 
-        // --- Drawing Helpers ---
+        // Physics Constants
+        const N_AIR = 1.0003;
+        const N_WATER = 1.333;
+        const N_SUGAR_SAT = 1.500; // Approx for high concentration
 
-        function drawTank(ctx, x, y, w, h) {
-            // Tank Walls
-            ctx.strokeStyle = '#94a3b8'; // Slate-400
-            ctx.lineWidth = 4;
-            ctx.strokeRect(x, y, w, h);
+        // Drawing Functions
+        function drawBackground(w, h) {
+            // Air (Top)
+            ctx.fillStyle = '#1e293b'; // Slate-800
+            ctx.fillRect(0, 0, w, h/2);
 
-            // Water Gradient
-            const grad = ctx.createLinearGradient(x, y, x, y + h);
-            // Color becomes "thicker/darker" at bottom based on sugar
-            const opacityTop = 0.1;
-            const opacityBot = 0.1 + (state.gradient / 100) * 0.4;
-            
-            grad.addColorStop(0, `rgba(6, 182, 212, ${opacityTop})`); // Cyan
-            grad.addColorStop(1, `rgba(6, 182, 212, ${opacityBot})`); 
-            
-            ctx.fillStyle = grad;
-            ctx.fillRect(x, y, w, h);
-            
-            // Water Surface
+            // Water (Bottom)
+            // Color changes with concentration
+            const concRatio = state.concentration / 100;
+            // From Light Cyan to Darker/Thicker Teal
+            // R: 6 -> 6
+            // G: 182 -> 140
+            // B: 212 -> 180
+            // Opacity increases visually implies density
+            ctx.fillStyle = `rgba(6, ${182 - concRatio*40}, ${212 - concRatio*30}, ${0.3 + concRatio*0.4})`;
+            ctx.fillRect(0, h/2, w, h/2);
+
+            // Interface Line
             ctx.beginPath();
-            ctx.moveTo(x, y + 10);
-            ctx.lineTo(x + w, y + 10);
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.moveTo(0, h/2);
+            ctx.lineTo(w, h/2);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Normal Line (Dashed)
+            ctx.beginPath();
+            ctx.moveTo(w/2, 50);
+            ctx.lineTo(w/2, h - 50);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.setLineDash([5, 5]);
             ctx.lineWidth = 1;
             ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw "Particles" to represent density visually
+            if (concRatio > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                const particleCount = Math.floor(concRatio * 50);
+                const seed = 123; // Fixed random seed visual
+                for(let i=0; i<particleCount; i++) {
+                    // Simple pseudo-random positions based on loop
+                    const px = (Math.sin(i * 123 + state.time) * w/2 + w/2) % w;
+                    const py = h/2 + (Math.cos(i * 321) * h/4 + h/4) % (h/2);
+                    ctx.beginPath();
+                    ctx.arc(px, py, 1 + Math.sin(i)*0.5, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
         }
 
-        function drawObject(ctx, x, y, scale = 1, isGhost = false) {
+        function drawProtractor(cx, cy, radius) {
+            if (!showProtractorCb.checked) return;
+
             ctx.save();
-            ctx.translate(x, y);
-            ctx.scale(scale, scale);
+            ctx.translate(cx, cy);
             
-            if(isGhost) {
-                ctx.globalAlpha = 0.5;
-                ctx.setLineDash([2, 2]);
-            }
-
-            // Draw a Red Ball with highlight
+            // Semicircle
             ctx.beginPath();
-            ctx.arc(0, 0, 10, 0, Math.PI * 2);
-            ctx.fillStyle = isGhost ? '#ef4444' : '#dc2626'; // Red
-            if(!isGhost) {
-                // Gradient for 3D effect
-                const grad = ctx.createRadialGradient(-3, -3, 2, 0, 0, 10);
-                grad.addColorStop(0, '#fca5a5');
-                grad.addColorStop(1, '#991b1b');
-                ctx.fillStyle = grad;
-            }
-            ctx.fill();
-            if (isGhost) {
-                 ctx.strokeStyle = '#fff';
-                 ctx.lineWidth = 1;
-                 ctx.stroke();
-            }
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
 
-            // Draw a stick/stand
-            ctx.fillStyle = '#64748b';
-            ctx.fillRect(-2, 10, 4, 200); // Long stick downwards
+            // Ticks
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
 
+            for (let deg = 0; deg < 360; deg += 10) {
+                const rad = (deg - 90) * Math.PI / 180;
+                const r1 = radius - 5;
+                const r2 = radius;
+                
+                // Major ticks every 30
+                const isMajor = deg % 90 === 0;
+                const len = isMajor ? 10 : 5;
+                
+                const x1 = Math.cos(rad) * (radius - len);
+                const y1 = Math.sin(rad) * (radius - len);
+                const x2 = Math.cos(rad) * radius;
+                const y2 = Math.sin(rad) * radius;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.stroke();
+
+                // Draw numbers for refraction side (bottom)
+                // 0 is Normal (down), so 90 is left/right surface
+                // Let's label angles from normal
+                // Angle from normal = |deg - 90| ? No simple circle logic
+            }
             ctx.restore();
         }
 
-        // --- Render Loop ---
-        function render() {
-            state.time += 0.05;
+        function drawRays(w, h) {
+            const cx = w / 2;
+            const cy = h / 2;
+            const rayLen = Math.min(w, h) * 0.4;
 
-            // --- 1. Side View ---
-            const w1 = sideCanvas.width;
-            const h1 = sideCanvas.height;
-            sideCtx.clearRect(0, 0, w1, h1);
+            // 1. Calculate Refractive Index based on slider
+            const ratio = state.concentration / 100;
+            const n2 = N_WATER + (N_SUGAR_SAT - N_WATER) * ratio;
 
-            // Layout
-            const tankX = w1 * 0.25; // Shifted slightly right to make room for labels
-            const tankW = w1 * 0.6;
-            const tankH = h1 * 0.7;
-            const tankY = (h1 - tankH) / 2;
-            
-            // Draw Tank
-            drawTank(sideCtx, tankX, tankY, tankW, tankH);
+            // 2. Physics: Snell's Law
+            // n1 * sin(theta1) = n2 * sin(theta2)
+            // theta1 is angle from normal
+            const theta1Rad = state.incidentAngle * Math.PI / 180;
+            const sinTheta2 = (N_AIR * Math.sin(theta1Rad)) / n2;
+            const theta2Rad = Math.asin(sinTheta2);
+            const theta2Deg = theta2Rad * 180 / Math.PI;
 
-            // Object Position (Real)
-            // objHeight 0 = bottom, 100 = top of SLIDER.
-            // Map slider (10-90) to Tank Y
-            const objRealY = tankY + tankH - (state.objHeight / 100) * tankH;
-            const objX = tankX + tankW - 30; // Inside tank, near right wall
+            // 3. Draw Incident Ray (Air)
+            // Comes from top-left (quadrant 2) usually if angle > 0
+            // Angle from normal (Up Y-axis is -90 deg in canvas space?)
+            // Normal is Vertical. 0 deg incident = straight down.
+            // Let's define incident angle from Vertical.
+            // Start point:
+            const startX = cx - Math.sin(theta1Rad) * rayLen;
+            const startY = cy - Math.cos(theta1Rad) * rayLen;
 
-            // Draw Real Object
-            drawObject(sideCtx, objX, objRealY, 1.0);
-            
-            // Draw Label
-            sideCtx.fillStyle = '#fff';
-            sideCtx.font = '12px Arial';
-            sideCtx.fillText('實際物體', objX - 25, objRealY + 25);
-
-
-            // --- Ray Tracing Logic for Side View ---
-            // We want to find a ray that starts at Object and hits the Eye.
-            // Eye is at left side.
-            const eyeX = tankX - 60;
-            const eyeY = tankY + tankH/2; // Eye looks at center height
-            
-            // Draw Eye
-            sideCtx.fillStyle = '#fff';
-            sideCtx.beginPath();
-            sideCtx.arc(eyeX, eyeY, 5, 0, Math.PI*2);
-            sideCtx.fill();
-
-            // Calculate Curve (Simulation of Ray)
-            const strength = state.gradient / 100;
-            const bendFactor = 60 * strength; 
-            const midX = (objX + eyeX) / 2;
-            const midY = (objRealY + eyeY) / 2 - bendFactor; // Control point moves UP
-
-            // Draw the Real Ray (Yellow) - Keep this!
-            sideCtx.beginPath();
-            sideCtx.moveTo(objX, objRealY);
-            sideCtx.quadraticCurveTo(midX, midY, eyeX, eyeY);
-            sideCtx.strokeStyle = '#facc15'; // Yellow ray
-            sideCtx.lineWidth = 2;
-            sideCtx.stroke();
-            
-            // REMOVED THE YELLOW DOT ON ARROW as requested
-
-            // --- Virtual Image Logic (GHOST IS BACK but NO DASHED LINES) ---
-            const virtualY = objRealY - bendFactor * 1.5; // Shift UP like before
-            
-            if (state.gradient > 5) {
-                // Draw Ghost Object (The Virtual Image)
-                drawObject(sideCtx, objX, virtualY, 1.0, true);
-                
-                // Add Label for Ghost
-                sideCtx.fillStyle = 'rgba(239, 68, 68, 0.8)'; // Red
-                sideCtx.font = '12px Arial';
-                sideCtx.fillText('虛像', objX - 25, virtualY - 10);
-            }
-
-            // --- 2. Subjective View (POV) ---
-            const w2 = povCanvas.width;
-            const h2 = povCanvas.height;
-            povCtx.clearRect(0, 0, w2, h2);
-
-            // Background (Looking through tank)
-            // Gradient matches tank
-            const povGrad = povCtx.createLinearGradient(0, 0, 0, h2);
-            povGrad.addColorStop(0, '#ecfeff'); // Cyan-50
-            povGrad.addColorStop(1, '#06b6d4'); // Cyan-500
-            povCtx.fillStyle = povGrad;
-            povCtx.fillRect(0, 0, w2, h2);
-
-            // Distorted Grid Lines to show "Lensing" (FIXED: HORIZONTAL ONLY)
-            povCtx.strokeStyle = 'rgba(255,255,255,0.3)';
-            povCtx.lineWidth = 1;
-            
-            for(let i=0; i<h2; i+=40) {
-                povCtx.beginPath();
-                
-                // Effective Y = i - shift(i)
-                const depth = i / h2; 
-                const shift = depth * state.gradient * 1.5;
-                const drawnY = i - shift;
-                
-                // Draw straight horizontal line, just shifted up
-                povCtx.moveTo(0, drawnY);
-                povCtx.lineTo(w2, drawnY); 
-                povCtx.stroke();
-            }
-
-            // Draw Object in POV
-            const povObjX = w2 / 2;
-            const normalizedY = (objRealY - tankY) / tankH; // 0 to 1
-            const basePovY = normalizedY * h2; 
-            
-            // Apply the optical shift (same logic as side view virtual image)
-            const povShift = (state.gradient * 1.5); 
-            const finalPovY = basePovY - povShift;
-
-            // Scale/Stretch effect
-            let stretchY = 1.0;
-            if (state.gradient > 30) {
-                stretchY = 1.0 + (state.gradient / 200);
-            }
-
-            ctx = povCtx;
+            // Draw Laser Body
             ctx.save();
-            ctx.translate(povObjX, finalPovY);
-            ctx.scale(2.0, 2.0 * stretchY); // Scale up for POV
+            ctx.translate(startX, startY);
+            ctx.rotate(theta1Rad); // Rotate to point towards center?
+            // Actually direction vector is (sin, cos).
+            // At start point, direction is towards (cx, cy).
+            const dirAngle = Math.atan2(cy - startY, cx - startX);
+            ctx.rotate(dirAngle);
             
-            // Draw Ball
-            ctx.beginPath();
-            ctx.arc(0, 0, 10, 0, Math.PI * 2);
-            const grad = ctx.createRadialGradient(-3, -3, 2, 0, 0, 10);
-            grad.addColorStop(0, '#fca5a5');
-            grad.addColorStop(1, '#991b1b');
-            ctx.fillStyle = grad;
-            ctx.fill();
-            
-            // Stick
-            ctx.fillStyle = '#475569';
-            ctx.fillRect(-2, 10, 4, 300); 
-            
+            // Laser Casing
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(-15, -6, 30, 12);
+            ctx.fillStyle = '#ef4444'; // Red button
+            ctx.fillRect(-5, -7, 6, 2);
             ctx.restore();
 
-            // Overlay Text
-            if (state.gradient > 20) {
-                povCtx.fillStyle = '#fff';
-                povCtx.font = 'bold 16px Noto Sans TC';
-                povCtx.shadowColor = 'black';
-                povCtx.shadowBlur = 4;
-                povCtx.fillText('⚠️ 影像上浮變形', 20, h2 - 20);
-                povCtx.shadowBlur = 0;
+            // Draw Red Beam (Incident)
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(cx, cy);
+            ctx.strokeStyle = '#f87171'; // Red-400
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0; // Reset
+
+            // 4. Draw Refracted Ray (Water)
+            // Goes into bottom-right (quadrant 4)
+            const endX = cx + Math.sin(theta2Rad) * rayLen;
+            const endY = cy + Math.cos(theta2Rad) * rayLen;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = '#f87171';
+            ctx.lineWidth = 3;
+            // Fade out slightly in water
+            ctx.globalAlpha = 0.8; 
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+            ctx.shadowBlur = 0;
+
+            // 5. Draw Angle Arcs & Labels
+            const arcRadius = 60;
+            
+            // Incident Angle Arc
+            if (state.incidentAngle > 5) {
+                ctx.beginPath();
+                // Arc from Normal (Up: -PI/2) to Incident Ray
+                // Ray comes from top-left. Vector is (startX-cx, startY-cy).
+                // Angle of vector from center is:
+                const incAngleFromCenter = Math.atan2(startY - cy, startX - cx); 
+                // Normal is -PI/2.
+                ctx.arc(cx, cy, arcRadius, -Math.PI/2, incAngleFromCenter, true);
+                ctx.strokeStyle = '#fbbf24'; // Amber
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Text
+                ctx.fillStyle = '#fbbf24';
+                ctx.font = 'bold 14px Arial';
+                // Position text in middle of angle
+                const midAng = (-Math.PI/2 + incAngleFromCenter) / 2;
+                // Since we drew counter-clockwise/true, need to be careful with mid calc
+                // Actually incident comes from left, so angle is like -135 deg. Normal is -90.
+                // Text pos
+                const tx = cx + Math.cos(midAng - Math.PI) * (arcRadius + 20); // Flip side? No
+                // Simple placement:
+                ctx.fillText(`${state.incidentAngle}°`, cx - 30, cy - 80);
             }
 
-            requestAnimationFrame(render);
+            // Refraction Angle Arc
+            if (state.incidentAngle > 0) {
+                ctx.beginPath();
+                // Arc from Normal (Down: PI/2) to Refracted Ray
+                const refAngleFromCenter = Math.atan2(endY - cy, endX - cx);
+                ctx.arc(cx, cy, arcRadius, Math.PI/2, refAngleFromCenter, false); // Clockwise
+                ctx.strokeStyle = '#22d3ee'; // Cyan
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Text
+                ctx.fillStyle = '#22d3ee';
+                ctx.font = 'bold 14px Arial';
+                ctx.fillText(`${theta2Deg.toFixed(1)}°`, cx + 20, cy + 80);
+                
+                // Label "Refraction Angle"
+                ctx.font = '12px Arial';
+                ctx.fillStyle = '#67e8f9';
+                ctx.fillText("折射角", cx + 30, cy + 100);
+            }
         }
 
-        render();
+        // Main Loop
+        function loop() {
+            state.time += 0.02;
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.clearRect(0, 0, w, h);
+
+            drawBackground(w, h);
+            drawProtractor(w/2, h/2, Math.min(w, h) * 0.35);
+            drawRays(w, h);
+
+            requestAnimationFrame(loop);
+        }
+        loop();
 
     </script>
 </body>

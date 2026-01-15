@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANC 降噪耳機情境模擬器 - 國中教學版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: sans-serif; }
+        canvas { width: 100%; height: 450px; background: #0f172a; border-radius: 1rem; border: 1px solid #1e293b; }
+        .control-panel { background: #1e293b; padding: 1.5rem; border-radius: 1rem; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #3b82f6; }
+        .temp-display { font-family: 'Courier New', Courier, monospace; }
+        .efficiency-bar { height: 8px; border-radius: 4px; background: #334155; overflow: hidden; }
+        .efficiency-fill { height: 100%; transition: width 0.3s; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-white">主動降噪：為什麼聲音不見了？</h1>
+                <p class="text-slate-400 mt-1">互動重點：試著移動「波形位置」，找出能變安靜的神秘角度</p>
+            </div>
+            <div class="flex gap-4">
+                <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
+                    <span class="text-xs text-slate-400 block uppercase font-bold">目前耳機溫度</span>
+                    <span id="tempVal" class="text-xl font-bold text-orange-400 temp-display">25.00</span> <span class="text-orange-400 text-sm">°C</span>
+                </div>
+                <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 min-w-[140px]">
+                    <span class="text-xs text-slate-400 block uppercase font-bold">安靜程度 (抵消率)</span>
+                    <div class="efficiency-bar mt-2">
+                        <div id="effFill" class="efficiency-fill bg-emerald-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要視覺區域 -->
+        <div class="relative mb-6">
+            <canvas id="ancCanvas"></canvas>
+            <div class="absolute bottom-4 left-4 flex flex-wrap gap-4 bg-black/60 p-3 rounded-lg backdrop-blur-md text-xs border border-white/10">
+                <div class="flex items-center gap-2"><div class="w-8 h-1 bg-green-400 shadow-[0_0_8px_#4ade80]"></div> 環境噪音 (原本的聲音)</div>
+                <div class="flex items-center gap-2"><div class="w-8 h-1 bg-red-400 shadow-[0_0_8px_#f87171]"></div> 耳機發出的聲音</div>
+                <div class="flex items-center gap-2"><div class="w-8 h-1 bg-blue-400 shadow-[0_0_8px_#60a5fa]"></div> 最後進入耳朵的聲音</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- 參數控制 -->
+            <div class="control-panel shadow-2xl space-y-6">
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <label class="font-medium">噪音的高低音 (頻率)</label>
+                    </div>
+                    <input type="range" id="freqRange" min="50" max="400" value="120" step="1">
+                    <p class="text-xs text-slate-500 mt-1">低沉規律的聲音（如引擎）最容易降噪</p>
+                </div>
+
+                <div>
+                    <label class="font-medium block mb-2">移動耳機聲波的位置 (左右對齊)</label>
+                    <input type="range" id="phaseRange" min="0" max="360" value="0" step="1">
+                    <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                        <span>同步走</span>
+                        <span>對齊一半</span>
+                        <span>完全相反</span>
+                        <span>繞回原點</span>
+                    </div>
+                    <button id="autoANC" class="w-full mt-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm font-bold transition shadow-lg">
+                        自動尋找「完全相反」的位置
+                    </button>
+                </div>
+            </div>
+
+            <!-- 音效與音量 -->
+            <div class="control-panel shadow-2xl flex flex-col justify-center gap-6">
+                <div>
+                    <label class="font-medium block mb-2">噪音大小聲</label>
+                    <input type="range" id="volRange" min="0" max="0.6" value="0.3" step="0.01">
+                </div>
+                <button id="audioBtn" class="py-4 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2 shadow-lg">
+                    🔈 開啟模擬噪音
+                </button>
+            </div>
+
+            <!-- 教學引導 -->
+            <div class="control-panel bg-slate-800/50 border border-slate-700 flex flex-col justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-200 mb-2 border-b border-slate-700 pb-1">課堂思考題</h3>
+                    <p id="statusMsg" class="text-sm text-slate-400 italic">試試看：波形挪移到什麼位置，聲音會變最小？</p>
+                </div>
+                <div class="bg-black/40 p-3 rounded-md border border-white/5">
+                    <h4 class="text-[10px] text-orange-400 uppercase font-bold tracking-widest mb-1 italic">觀察重點</h4>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        1. 當藍色聲波幾乎消失時，看右上方的溫度計。<br>
+                        2. 思考：消失的聲音能量，變成了什麼？
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('ancCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        let state = {
+            phase: 0,
+            freq: 120,
+            volume: 0.3,
+            time: 0,
+            baseTemp: 25.0,
+            currentTemp: 25.0,
+            efficiency: 0,
+            isAudioOn: false
+        };
+
+        function resize() {
+            width = canvas.clientWidth;
+            height = canvas.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let audioCtx, oscNoise, oscAnti, gainMaster;
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            oscNoise = audioCtx.createOscillator();
+            oscAnti = audioCtx.createOscillator();
+            gainMaster = audioCtx.createGain();
+
+            oscNoise.type = 'sine';
+            oscAnti.type = 'sine';
+            
+            oscNoise.connect(gainMaster);
+            oscAnti.connect(gainMaster);
+            gainMaster.connect(audioCtx.destination);
+            
+            oscNoise.start();
+            oscAnti.start();
+            updateAudioParams();
+        }
+
+        function updateAudioParams() {
+            if (!audioCtx) return;
+            oscNoise.frequency.setTargetAtTime(state.freq, audioCtx.currentTime, 0.05);
+            oscAnti.frequency.setTargetAtTime(state.freq, audioCtx.currentTime, 0.05);
+
+            const rad = (state.phase * Math.PI) / 180;
+            const cancellationFactor = Math.abs(2 * Math.cos(rad / 2)) / 2;
+            gainMaster.gain.setTargetAtTime(state.volume * cancellationFactor, audioCtx.currentTime, 0.05);
+            
+            state.efficiency = (1 - (cancellationFactor)) * 100;
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, width, height);
+            
+            const centerY = height / 2;
+            const earX = width * 0.7; 
+            const headphoneX = width * 0.45; 
+            
+            ctx.fillStyle = "rgba(255,255,255,0.1)";
+            ctx.font = "bold 14px sans-serif";
+            ctx.fillText("外部環境", 20, 40);
+
+            // 1. 繪製耳朵
+            ctx.fillStyle = "#1e293b";
+            ctx.beginPath();
+            ctx.ellipse(earX + 80, centerY, 80, 140, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(earX, centerY - 40, 120, 80);
+            ctx.fillStyle = "#f1f5f9";
+            ctx.fillText("人耳 (內部耳道)", earX + 10, centerY + 70);
+
+            // 2. 繪製耳機
+            ctx.fillStyle = "#334155";
+            ctx.beginPath();
+            ctx.roundRect(headphoneX - 30, centerY - 100, 60, 200, 15);
+            ctx.fill();
+            
+            // 3. 發熱視覺
+            const heatAlpha = (state.efficiency / 100) * 0.7;
+            ctx.fillStyle = `rgba(249, 115, 22, ${heatAlpha})`;
+            ctx.shadowBlur = state.efficiency / 5;
+            ctx.shadowColor = "rgba(249, 115, 22, 0.8)";
+            ctx.beginPath();
+            ctx.arc(headphoneX, centerY, 35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            if (state.efficiency > 30 && state.isAudioOn) {
+                ctx.fillStyle = `rgba(251, 146, 60, ${Math.min(1, heatAlpha * 2)})`;
+                ctx.font = "bold 18px sans-serif";
+                ctx.fillText("⚡ 耳機溫度升高", headphoneX + 45, centerY - 15);
+                
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(251, 146, 60, ${Math.min(1, heatAlpha * 2)})`;
+                ctx.lineWidth = 2;
+                ctx.moveTo(headphoneX + 40, centerY - 10);
+                ctx.lineTo(headphoneX + 20, centerY + 5);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = "#f1f5f9";
+            ctx.font = "bold 14px sans-serif";
+            ctx.fillText("降噪耳機", headphoneX - 25, centerY + 130);
+
+            // --- 波形 ---
+            const amp = 50 * state.volume;
+            const pxPerCycle = 1200 / state.freq;
+            const phaseRad = (state.phase * Math.PI) / 180;
+
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#4ade80';
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            for (let x = 0; x < earX; x++) {
+                const y = centerY + Math.sin(x / pxPerCycle - state.time) * amp;
+                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = '#f87171';
+            ctx.beginPath();
+            for (let x = headphoneX; x < earX; x++) {
+                const y = centerY + Math.sin(x / pxPerCycle - state.time + phaseRad) * amp;
+                if (x === headphoneX) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#60a5fa';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            for (let x = headphoneX; x < width; x++) {
+                const noiseY = Math.sin(x / pxPerCycle - state.time) * amp;
+                const antiY = Math.sin(x / pxPerCycle - state.time + phaseRad) * amp;
+                const y = centerY + (noiseY + antiY);
+                if (x === headphoneX) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            
+            ctx.strokeStyle = "#94a3b8";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(earX + 110, centerY - 30);
+            ctx.lineTo(earX + 110, centerY + 30);
+            ctx.stroke();
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "10px sans-serif";
+            ctx.fillText("耳膜", earX + 105, centerY - 40);
+
+            state.time += 0.12;
+            
+            if (state.isAudioOn) {
+                const targetTemp = state.baseTemp + (state.efficiency / 100) * 3.5 * state.volume;
+                state.currentTemp += (targetTemp - state.currentTemp) * 0.005;
+            } else {
+                state.currentTemp += (state.baseTemp - state.currentTemp) * 0.01;
+            }
+
+            document.getElementById('tempVal').innerText = state.currentTemp.toFixed(2);
+            document.getElementById('effFill').style.width = state.efficiency + '%';
+            
+            requestAnimationFrame(drawScene);
+        }
+
+        document.getElementById('freqRange').addEventListener('input', (e) => {
+            state.freq = parseInt(e.target.value);
+            updateAudioParams();
+        });
+
+        document.getElementById('phaseRange').addEventListener('input', (e) => {
+            state.phase = parseInt(e.target.value);
+            updateAudioParams();
+        });
+
+        document.getElementById('volRange').addEventListener('input', (e) => {
+            state.volume = parseFloat(e.target.value);
+            updateAudioParams();
+        });
+
+        document.getElementById('autoANC').addEventListener('click', () => {
+            state.phase = 180;
+            document.getElementById('phaseRange').value = 180;
+            updateAudioParams();
+        });
+
+        document.getElementById('audioBtn').addEventListener('click', function() {
+            if (!state.isAudioOn) {
+                initAudio();
+                state.isAudioOn = true;
+                this.innerHTML = `<span>🛑 關閉噪音</span>`;
+                this.classList.replace('bg-emerald-600', 'bg-red-600');
+            } else {
+                audioCtx.close();
+                state.isAudioOn = false;
+                this.innerHTML = `🔈 開啟模擬噪音`;
+                this.classList.replace('bg-red-600', 'bg-emerald-600');
+            }
+        });
+
+        drawScene();
+    </script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>糖水連續折射模擬實驗</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        
+        /* Slider styling */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #06b6d4; /* Cyan-500 */
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 2px;
+        }
+
+        .canvas-card {
+            background-color: #1e293b; /* Slate-800 */
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-lg sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-cyan-400">🧪 糖水折射實驗室</h1>
+                <p class="text-slate-400 text-xs md:text-sm">探究連續折射現象：光線為何會轉彎？</p>
+            </div>
+            <div class="mt-2 md:mt-0 flex gap-2">
+                <div class="flex items-center gap-2 text-xs bg-slate-700 px-3 py-1 rounded-full border border-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-yellow-400"></span> 實際光的路徑
+                </div>
+                <div class="flex items-center gap-2 text-xs bg-slate-700 px-3 py-1 rounded-full border border-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-red-500 opacity-50"></span> 眼睛看到的虛像
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Controls (Left Sidebar) -->
+        <div class="lg:col-span-3 space-y-6">
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                <h2 class="text-lg font-bold mb-6 text-cyan-300 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    實驗參數
+                </h2>
+
+                <!-- Sugar Concentration -->
+                <div class="mb-8">
+                    <label class="block mb-2 text-sm font-bold text-slate-300">糖水濃度差異</label>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-xs text-slate-500">純水 (濃度一樣)</span>
+                        <span class="text-xs text-slate-500">飽和糖水 (濃度差很大)</span>
+                    </div>
+                    <input type="range" id="gradientSlider" min="0" max="100" value="0" class="w-full">
+                    <div class="mt-2 text-right text-cyan-400 font-mono text-sm" id="gradientVal">0%</div>
+                    <p class="text-xs text-slate-500 mt-2 bg-slate-900/50 p-2 rounded">
+                        濃度越高，水越濃稠，光在裡面跑得越慢。這會讓光線更容易向下彎曲。
+                    </p>
+                </div>
+
+                <!-- Object Position -->
+                <div class="mb-4">
+                    <label class="block mb-2 text-sm font-bold text-slate-300">目標物高度</label>
+                    <input type="range" id="heightSlider" min="10" max="90" value="50" class="w-full">
+                    <div class="flex justify-between mt-1 text-xs text-slate-500">
+                        <span>底部</span>
+                        <span>頂部</span>
+                    </div>
+                </div>
+
+                <!-- Info Box -->
+                <div class="mt-6 border-t border-slate-700 pt-4">
+                    <h3 class="text-sm font-bold text-slate-400 mb-2">💡 觀察重點</h3>
+                    <ul class="text-xs text-slate-400 space-y-2 list-disc list-inside">
+                        <li>注意看右圖的紅球位置變化。</li>
+                        <li>當濃度差變大時，光線會在水缸內向下彎曲。</li>
+                        <li>但眼睛會覺得光是直直來的，所以物體看起來會<strong>浮起來</strong>。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualizations (Right Area) -->
+        <div class="lg:col-span-9 flex flex-col gap-6">
+
+            <!-- 1. Physical View (Side Profile) -->
+            <div class="canvas-card rounded-xl overflow-hidden relative group">
+                <div class="absolute top-0 left-0 bg-slate-900/80 px-4 py-2 text-cyan-300 text-sm font-bold rounded-br-lg border-b border-r border-slate-700 z-10">
+                    1. 實驗桌側面視角 (物理真相)
+                </div>
+                <div class="w-full h-64 md:h-80 relative" id="sideViewContainer">
+                    <canvas id="sideViewCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+                    
+                    <!-- Labels inside canvas area -->
+                    <div class="absolute top-1/2 left-2 transform -translate-y-1/2 text-slate-400 text-xs md:text-sm text-center">
+                        <div class="text-3xl mb-1">👀</div>
+                        觀察者
+                    </div>
+                    <!-- New Gradient Labels (Simplified for Middle School) -->
+                    <div class="absolute top-16 left-1/4 text-slate-400 text-xs text-right pr-2 border-r border-slate-600">
+                        頂部: 濃度低<br>光速較快
+                    </div>
+                    <div id="densityLabel" class="absolute bottom-16 left-1/4 text-cyan-400 text-xs text-right pr-2 border-r border-cyan-600 font-bold" style="opacity: 0; transition: opacity 0.3s;">
+                        底部: 濃度高<br>光速較慢
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Subjective View (What the eye sees) -->
+            <div class="canvas-card rounded-xl overflow-hidden relative">
+                <div class="absolute top-0 left-0 bg-slate-900/80 px-4 py-2 text-yellow-300 text-sm font-bold rounded-br-lg border-b border-r border-slate-700 z-10">
+                    2. 你的主觀視角 (透過水缸看)
+                </div>
+                <div class="w-full h-64 md:h-80 relative bg-black" id="povContainer">
+                    <canvas id="povCanvas" class="w-full h-full block"></canvas>
+                    
+                    <!-- Overlay Grid Effect for "Looking through glass" -->
+                    <div class="absolute inset-0 pointer-events-none opacity-30" 
+                         style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 20px 20px;">
+                    </div>
+                    <!-- Frame -->
+                    <div class="absolute inset-0 border-[20px] border-slate-800 pointer-events-none shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]"></div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        // --- Setup ---
+        const sideCanvas = document.getElementById('sideViewCanvas');
+        const povCanvas = document.getElementById('povCanvas');
+        const sideCtx = sideCanvas.getContext('2d');
+        const povCtx = povCanvas.getContext('2d');
+        
+        const gradientSlider = document.getElementById('gradientSlider');
+        const heightSlider = document.getElementById('heightSlider');
+        const gradientVal = document.getElementById('gradientVal');
+        const densityLabel = document.getElementById('densityLabel');
+
+        let state = {
+            gradient: 0, // 0 to 100
+            objHeight: 50, // 0 to 100 (percentage from bottom)
+            time: 0
+        };
+
+        // --- Resize Logic ---
+        function resize() {
+            const sideContainer = document.getElementById('sideViewContainer');
+            const povContainer = document.getElementById('povContainer');
+            
+            sideCanvas.width = sideContainer.clientWidth;
+            sideCanvas.height = sideContainer.clientHeight;
+            
+            povCanvas.width = povContainer.clientWidth;
+            povCanvas.height = povContainer.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Interaction ---
+        gradientSlider.addEventListener('input', (e) => {
+            state.gradient = parseInt(e.target.value);
+            gradientVal.innerText = state.gradient + '%';
+            if(densityLabel) {
+                 densityLabel.style.opacity = state.gradient > 20 ? 1 : 0;
+            }
+        });
+        heightSlider.addEventListener('input', (e) => {
+            state.objHeight = parseInt(e.target.value);
+        });
+
+        // --- Physics Helpers ---
+        function getN(yNormalized) {
+            const nWater = 1.33;
+            const maxDelta = 0.15 * (state.gradient / 100); 
+            return nWater + maxDelta * yNormalized;
+        }
+
+        // --- Drawing Helpers ---
+
+        function drawTank(ctx, x, y, w, h) {
+            // Tank Walls
+            ctx.strokeStyle = '#94a3b8'; // Slate-400
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, w, h);
+
+            // Water Gradient
+            const grad = ctx.createLinearGradient(x, y, x, y + h);
+            // Color becomes "thicker/darker" at bottom based on sugar
+            const opacityTop = 0.1;
+            const opacityBot = 0.1 + (state.gradient / 100) * 0.4;
+            
+            grad.addColorStop(0, `rgba(6, 182, 212, ${opacityTop})`); // Cyan
+            grad.addColorStop(1, `rgba(6, 182, 212, ${opacityBot})`); 
+            
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, w, h);
+            
+            // Water Surface
+            ctx.beginPath();
+            ctx.moveTo(x, y + 10);
+            ctx.lineTo(x + w, y + 10);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        function drawObject(ctx, x, y, scale = 1, isGhost = false) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            if(isGhost) {
+                ctx.globalAlpha = 0.5;
+                ctx.setLineDash([2, 2]);
+            }
+
+            // Draw a Red Ball with highlight
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fillStyle = isGhost ? '#ef4444' : '#dc2626'; // Red
+            if(!isGhost) {
+                // Gradient for 3D effect
+                const grad = ctx.createRadialGradient(-3, -3, 2, 0, 0, 10);
+                grad.addColorStop(0, '#fca5a5');
+                grad.addColorStop(1, '#991b1b');
+                ctx.fillStyle = grad;
+            }
+            ctx.fill();
+            if (isGhost) {
+                 ctx.strokeStyle = '#fff';
+                 ctx.lineWidth = 1;
+                 ctx.stroke();
+            }
+
+            // Draw a stick/stand
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(-2, 10, 4, 200); // Long stick downwards
+
+            ctx.restore();
+        }
+
+        // --- Render Loop ---
+        function render() {
+            state.time += 0.05;
+
+            // --- 1. Side View ---
+            const w1 = sideCanvas.width;
+            const h1 = sideCanvas.height;
+            sideCtx.clearRect(0, 0, w1, h1);
+
+            // Layout
+            const tankX = w1 * 0.25; // Shifted slightly right to make room for labels
+            const tankW = w1 * 0.6;
+            const tankH = h1 * 0.7;
+            const tankY = (h1 - tankH) / 2;
+            
+            // Draw Tank
+            drawTank(sideCtx, tankX, tankY, tankW, tankH);
+
+            // Object Position (Real)
+            // objHeight 0 = bottom, 100 = top of SLIDER.
+            // Map slider (10-90) to Tank Y
+            const objRealY = tankY + tankH - (state.objHeight / 100) * tankH;
+            const objX = tankX + tankW - 30; // Inside tank, near right wall
+
+            // Draw Real Object
+            drawObject(sideCtx, objX, objRealY, 1.0);
+            
+            // Draw Label
+            sideCtx.fillStyle = '#fff';
+            sideCtx.font = '12px Arial';
+            sideCtx.fillText('實際物體', objX - 25, objRealY + 25);
+
+
+            // --- Ray Tracing Logic for Side View ---
+            // We want to find a ray that starts at Object and hits the Eye.
+            // Eye is at left side.
+            const eyeX = tankX - 60;
+            const eyeY = tankY + tankH/2; // Eye looks at center height
+            
+            // Draw Eye
+            sideCtx.fillStyle = '#fff';
+            sideCtx.beginPath();
+            sideCtx.arc(eyeX, eyeY, 5, 0, Math.PI*2);
+            sideCtx.fill();
+
+            // Calculate Curve (Simulation of Ray)
+            const strength = state.gradient / 100;
+            const bendFactor = 60 * strength; 
+            const midX = (objX + eyeX) / 2;
+            const midY = (objRealY + eyeY) / 2 - bendFactor; // Control point moves UP
+
+            // Draw the Real Ray (Yellow) - Keep this!
+            sideCtx.beginPath();
+            sideCtx.moveTo(objX, objRealY);
+            sideCtx.quadraticCurveTo(midX, midY, eyeX, eyeY);
+            sideCtx.strokeStyle = '#facc15'; // Yellow ray
+            sideCtx.lineWidth = 2;
+            sideCtx.stroke();
+            
+            // REMOVED THE YELLOW DOT ON ARROW as requested
+
+            // --- Virtual Image Logic (GHOST IS BACK but NO DASHED LINES) ---
+            const virtualY = objRealY - bendFactor * 1.5; // Shift UP like before
+            
+            if (state.gradient > 5) {
+                // Draw Ghost Object (The Virtual Image)
+                drawObject(sideCtx, objX, virtualY, 1.0, true);
+                
+                // Add Label for Ghost
+                sideCtx.fillStyle = 'rgba(239, 68, 68, 0.8)'; // Red
+                sideCtx.font = '12px Arial';
+                sideCtx.fillText('虛像', objX - 25, virtualY - 10);
+            }
+
+            // --- 2. Subjective View (POV) ---
+            const w2 = povCanvas.width;
+            const h2 = povCanvas.height;
+            povCtx.clearRect(0, 0, w2, h2);
+
+            // Background (Looking through tank)
+            // Gradient matches tank
+            const povGrad = povCtx.createLinearGradient(0, 0, 0, h2);
+            povGrad.addColorStop(0, '#ecfeff'); // Cyan-50
+            povGrad.addColorStop(1, '#06b6d4'); // Cyan-500
+            povCtx.fillStyle = povGrad;
+            povCtx.fillRect(0, 0, w2, h2);
+
+            // Distorted Grid Lines to show "Lensing" (FIXED: HORIZONTAL ONLY)
+            povCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+            povCtx.lineWidth = 1;
+            
+            for(let i=0; i<h2; i+=40) {
+                povCtx.beginPath();
+                
+                // Effective Y = i - shift(i)
+                const depth = i / h2; 
+                const shift = depth * state.gradient * 1.5;
+                const drawnY = i - shift;
+                
+                // Draw straight horizontal line, just shifted up
+                povCtx.moveTo(0, drawnY);
+                povCtx.lineTo(w2, drawnY); 
+                povCtx.stroke();
+            }
+
+            // Draw Object in POV
+            const povObjX = w2 / 2;
+            const normalizedY = (objRealY - tankY) / tankH; // 0 to 1
+            const basePovY = normalizedY * h2; 
+            
+            // Apply the optical shift (same logic as side view virtual image)
+            const povShift = (state.gradient * 1.5); 
+            const finalPovY = basePovY - povShift;
+
+            // Scale/Stretch effect
+            let stretchY = 1.0;
+            if (state.gradient > 30) {
+                stretchY = 1.0 + (state.gradient / 200);
+            }
+
+            ctx = povCtx;
+            ctx.save();
+            ctx.translate(povObjX, finalPovY);
+            ctx.scale(2.0, 2.0 * stretchY); // Scale up for POV
+            
+            // Draw Ball
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            const grad = ctx.createRadialGradient(-3, -3, 2, 0, 0, 10);
+            grad.addColorStop(0, '#fca5a5');
+            grad.addColorStop(1, '#991b1b');
+            ctx.fillStyle = grad;
+            ctx.fill();
+            
+            // Stick
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(-2, 10, 4, 300); 
+            
+            ctx.restore();
+
+            // Overlay Text
+            if (state.gradient > 20) {
+                povCtx.fillStyle = '#fff';
+                povCtx.font = 'bold 16px Noto Sans TC';
+                povCtx.shadowColor = 'black';
+                povCtx.shadowBlur = 4;
+                povCtx.fillText('⚠️ 影像上浮變形', 20, h2 - 20);
+                povCtx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        render();
+
+    </script>
+</body>
+</html>

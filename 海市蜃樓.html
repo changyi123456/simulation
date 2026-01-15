@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上蜃景謎團：消失的船隻</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #f59e0b; /* Amber for mystery */
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+        
+        .canvas-container {
+            position: relative;
+            background: linear-gradient(to top, #e0f2fe 0%, #fff 100%);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+            touch-action: none; /* Prevent scrolling when drawing */
+        }
+
+        .pencil-cursor {
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body class="bg-amber-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-slate-800 text-white p-4 shadow-lg border-b-4 border-amber-500">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold tracking-wider text-amber-400">🕵️ 自然科學解謎任務</h1>
+                <p class="text-slate-300 text-sm">任務代號：幽靈船之謎</p>
+            </div>
+            <div class="mt-2 md:mt-0 text-sm bg-slate-700 px-4 py-2 rounded-lg border border-slate-600">
+                目標：觀察現象，推理出光的路徑
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Column: Controls & Hints -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Controls Card -->
+            <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700">
+                    ⚙️ 環境變因設定
+                </h2>
+
+                <!-- Temperature Gradient Control -->
+                <div class="mb-6">
+                    <div class="flex justify-between mb-2">
+                        <label class="font-bold text-slate-700">空氣溫差等級</label>
+                        <span id="tempVal" class="text-blue-600 font-mono">0</span>
+                    </div>
+                    <input type="range" id="inversionStrength" min="0" max="100" value="50" class="w-full">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>正常天氣</span>
+                        <span>極地氣候 (溫差大)</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded">
+                        調整看看：當海面非常冷，高空比較暖的時候，會發生什麼事？
+                    </p>
+                </div>
+
+                <!-- Distance Control -->
+                <div class="mb-2">
+                    <div class="flex justify-between mb-2">
+                        <label class="font-bold text-slate-700">觀察距離</label>
+                        <span id="distVal" class="text-blue-600 font-mono">60km</span>
+                    </div>
+                    <input type="range" id="distance" min="10" max="100" value="60" class="w-full">
+                </div>
+            </div>
+
+            <!-- Hints Card -->
+            <div class="bg-amber-100 p-6 rounded-xl border border-amber-200 shadow-sm relative overflow-hidden">
+                <div class="absolute -right-4 -top-4 text-amber-200 opacity-50 text-9xl font-serif">?</div>
+                <h3 class="font-bold text-amber-900 mb-3 flex items-center gap-2">
+                    💡 偵探筆記 (解謎線索)
+                </h3>
+                <ul class="space-y-3 text-sm text-amber-900 font-medium">
+                    <li class="flex gap-2">
+                        <span class="bg-amber-200 w-5 h-5 flex items-center justify-center rounded-full text-xs shrink-0">1</span>
+                        <span>這不是幻覺，這是真實的光學現象。</span>
+                    </li>
+                    <li class="flex gap-2">
+                        <span class="bg-amber-200 w-5 h-5 flex items-center justify-center rounded-full text-xs shrink-0">2</span>
+                        <span>光在「熱空氣」裡跑得比較快，在「冷空氣」裡跑得比較慢。</span>
+                    </li>
+                    <li class="flex gap-2">
+                        <span class="bg-amber-200 w-5 h-5 flex items-center justify-center rounded-full text-xs shrink-0">3</span>
+                        <span>想像軍隊行進：如果右邊的人走得快，左邊的人走得慢，隊伍會向哪邊轉彎？</span>
+                    </li>
+                    <li class="flex gap-2">
+                        <span class="bg-amber-200 w-5 h-5 flex items-center justify-center rounded-full text-xs shrink-0">4</span>
+                        <span>關鍵：我們的眼睛很單純，總覺得光是走「直線」進入眼睛的。</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Right Column: Visualizations -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            
+            <!-- View 1: Physical Side View (No Rays) -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200">
+                <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-700">1. 宏觀上帝視角 (實際位置)</h3>
+                    <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">光線路徑已隱藏</span>
+                </div>
+                <div class="canvas-container h-48 w-full relative" id="sideViewContainer">
+                    <canvas id="sideViewCanvas" class="w-full h-full block"></canvas>
+                    
+                    <!-- Labels -->
+                    <div class="absolute top-2 right-4 text-right pointer-events-none">
+                        <div class="text-amber-600 font-bold text-xs bg-white/80 px-2 py-1 rounded shadow">☀️ 較暖空氣 (光速快)</div>
+                    </div>
+                    <div class="absolute bottom-2 right-4 text-right pointer-events-none">
+                        <div class="text-blue-600 font-bold text-xs bg-white/80 px-2 py-1 rounded shadow">❄️ 極冷海面 (光速慢)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 2: Subjective View -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200">
+                <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-700">2. 船長望遠鏡視角 (你看到的樣子)</h3>
+                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">觀察結果</span>
+                </div>
+                <div class="relative h-48 w-full bg-sky-300 overflow-hidden">
+                    <canvas id="povCanvas" class="w-full h-full block absolute top-0 left-0"></canvas>
+                    <!-- Telescope Overlay -->
+                    <div class="absolute inset-0 pointer-events-none shadow-[inset_0_0_50px_rgba(0,0,0,0.4)] border-[10px] border-slate-800/20 rounded-lg"></div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- Bottom: Drawing Task -->
+        <div class="lg:col-span-3 mt-4">
+            <div class="bg-white p-1 rounded-xl shadow-xl border-2 border-dashed border-amber-400">
+                <div class="bg-amber-50 px-4 py-3 border-b border-amber-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">✏️</span>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-lg">任務三：畫出光的路徑</h3>
+                            <p class="text-xs text-slate-500">
+                                請用<span class="text-red-500 font-bold">紅色</span>畫出物體實際傳到眼睛的光線（彎曲），用<span class="text-green-600 font-bold">綠色</span>畫出眼睛如何看到虛像的視線（直線）。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <!-- Color Pickers -->
+                        <div class="flex bg-white rounded-lg p-1 border border-slate-200 mr-2 shadow-sm">
+                            <button onclick="setColor('#ef4444')" id="btnRed" title="紅色畫筆 (實際光徑)" class="w-8 h-8 rounded-full bg-red-500 border-2 border-slate-600 ring-2 ring-offset-1 ring-slate-300 hover:scale-110 transition"></button>
+                            <button onclick="setColor('#16a34a')" id="btnGreen" title="綠色畫筆 (虛像視線)" class="w-8 h-8 rounded-full bg-green-600 border-2 border-white hover:scale-110 transition ml-2"></button>
+                        </div>
+
+                        <button onclick="clearDrawing()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm hover:bg-slate-50 transition">
+                            橡皮擦 (清除)
+                        </button>
+                        <button onclick="downloadDrawing()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-md transition flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            下載作業圖片
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="relative w-full h-64 bg-slate-50 cursor-crosshair" id="drawingContainer">
+                    <canvas id="drawingCanvas" class="w-full h-full block touch-none"></canvas>
+                    <div class="absolute top-4 left-4 pointer-events-none text-slate-400 text-sm select-none opacity-50">
+                        在此處繪圖...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-800 text-center p-6 text-slate-400 text-sm mt-8">
+        <p>國中自然科學互動教材 | 上蜃景解謎</p>
+    </footer>
+
+    <script>
+        // DOM Elements
+        const sideCanvas = document.getElementById('sideViewCanvas');
+        const povCanvas = document.getElementById('povCanvas');
+        const drawCanvas = document.getElementById('drawingCanvas');
+        const sideCtx = sideCanvas.getContext('2d');
+        const povCtx = povCanvas.getContext('2d');
+        const drawCtx = drawCanvas.getContext('2d');
+        
+        const sliderStrength = document.getElementById('inversionStrength');
+        const sliderDistance = document.getElementById('distance');
+        const valStrength = document.getElementById('tempVal');
+        const valDistance = document.getElementById('distVal');
+        
+        const btnRed = document.getElementById('btnRed');
+        const btnGreen = document.getElementById('btnGreen');
+
+        // State
+        let state = {
+            strength: 50,
+            distance: 60,
+            time: 0
+        };
+
+        // Drawing State
+        let isDrawing = false;
+        let strokes = []; // Array of stroke objects: [ {points: [{x,y}...], color: '#...'}, ... ]
+        let currentStrokePoints = [];
+        let currentColor = '#ef4444'; // Default Red
+
+        // Resize Handlers
+        function resizeCanvases() {
+            const sideContainer = document.getElementById('sideViewContainer');
+            sideCanvas.width = sideContainer.clientWidth;
+            sideCanvas.height = sideContainer.clientHeight;
+
+            const povContainer = povCanvas.parentElement;
+            povCanvas.width = povContainer.clientWidth;
+            povCanvas.height = povContainer.clientHeight;
+
+            const drawContainer = document.getElementById('drawingContainer');
+            drawCanvas.width = drawContainer.clientWidth;
+            drawCanvas.height = drawContainer.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
+
+        // Interaction Listeners
+        sliderStrength.addEventListener('input', (e) => {
+            state.strength = parseInt(e.target.value);
+            valStrength.textContent = state.strength;
+        });
+
+        sliderDistance.addEventListener('input', (e) => {
+            state.distance = parseInt(e.target.value);
+            valDistance.textContent = state.distance + 'km';
+        });
+
+        // --- Drawing Tool Logic ---
+        function setColor(color) {
+            currentColor = color;
+            // Update UI
+            if (color === '#ef4444') {
+                btnRed.className = "w-8 h-8 rounded-full bg-red-500 border-2 border-slate-600 ring-2 ring-offset-1 ring-slate-300 hover:scale-110 transition";
+                btnGreen.className = "w-8 h-8 rounded-full bg-green-600 border-2 border-white hover:scale-110 transition ml-2";
+            } else {
+                btnRed.className = "w-8 h-8 rounded-full bg-red-500 border-2 border-white hover:scale-110 transition";
+                btnGreen.className = "w-8 h-8 rounded-full bg-green-600 border-2 border-slate-600 ring-2 ring-offset-1 ring-slate-300 hover:scale-110 transition ml-2";
+            }
+        }
+
+        function getPos(e) {
+            const rect = drawCanvas.getBoundingClientRect();
+            // Handle both mouse and touch
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function startDraw(e) {
+            isDrawing = true;
+            currentStrokePoints = [];
+            currentStrokePoints.push(getPos(e));
+        }
+
+        function moveDraw(e) {
+            if (!isDrawing) return;
+            e.preventDefault(); // Stop scrolling on touch
+            currentStrokePoints.push(getPos(e));
+        }
+
+        function endDraw() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            strokes.push({
+                points: currentStrokePoints,
+                color: currentColor
+            });
+        }
+
+        // Mouse events
+        drawCanvas.addEventListener('mousedown', startDraw);
+        drawCanvas.addEventListener('mousemove', moveDraw);
+        drawCanvas.addEventListener('mouseup', endDraw);
+        drawCanvas.addEventListener('mouseout', endDraw);
+
+        // Touch events
+        drawCanvas.addEventListener('touchstart', startDraw);
+        drawCanvas.addEventListener('touchmove', moveDraw);
+        drawCanvas.addEventListener('touchend', endDraw);
+
+        function clearDrawing() {
+            strokes = [];
+            currentStrokePoints = [];
+        }
+
+        function downloadDrawing() {
+            // Create a temporary link
+            const link = document.createElement('a');
+            link.download = '我的上蜃景推理作業.png';
+            link.href = drawCanvas.toDataURL();
+            link.click();
+        }
+
+
+        // --- Drawing Helper Functions ---
+
+        function drawShip(ctx, x, y, scale, opacity = 1, isGhost = false) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            ctx.globalAlpha = opacity;
+
+            // Hull
+            ctx.fillStyle = isGhost ? 'rgba(239, 68, 68, 0.6)' : '#1e293b';
+            
+            ctx.beginPath();
+            ctx.moveTo(-20, 0);
+            ctx.lineTo(20, 0);
+            ctx.lineTo(15, 10);
+            ctx.lineTo(-15, 10);
+            ctx.fill();
+
+            // Cabin
+            ctx.fillStyle = isGhost ? '#f87171' : '#cbd5e1';
+            ctx.fillRect(-10, -10, 15, 10);
+
+            // Mast
+            ctx.strokeStyle = isGhost ? '#f87171' : '#475569';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(0, -25);
+            ctx.stroke();
+
+            // Sail
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.moveTo(2, -23);
+            ctx.lineTo(12, -15);
+            ctx.lineTo(2, -12);
+            ctx.fill();
+
+            // Label
+            ctx.fillStyle = isGhost ? '#dc2626' : '#0f172a';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            if (!isGhost) {
+                ctx.fillText('實船', 0, 22);
+            } else {
+                ctx.fillText('虛像?', 0, -30);
+            }
+
+            ctx.restore();
+        }
+
+        function drawEye(ctx, x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+            // Eyeball
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Pupil
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(4, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // Label
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('觀察者', 0, 25);
+            ctx.restore();
+        }
+
+        function drawAtmosphereAndEarth(ctx, w, h) {
+            // Gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, h);
+            gradient.addColorStop(0, '#fffbeb'); // Warm top
+            gradient.addColorStop(0.5, '#e0f2fe'); 
+            gradient.addColorStop(1, '#93c5fd'); // Cold bottom
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, w, h);
+
+            // Earth
+            const seaLevelY = h * 0.8;
+            ctx.fillStyle = '#1e3a8a';
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            ctx.quadraticCurveTo(w/2, seaLevelY - 20, w, h); 
+            ctx.lineTo(w, h + 50);
+            ctx.lineTo(0, h + 50);
+            ctx.fill();
+
+            return seaLevelY; // Return baseline for positioning
+        }
+
+        // --- Render Loop ---
+
+        function render() {
+            state.time += 0.05;
+            
+            // --- Shared Calculation for Position ---
+            // We use the Side Canvas dimensions as reference for the drawing canvas too
+            const w1 = sideCanvas.width;
+            const h1 = sideCanvas.height;
+            
+            // Calc positions (reused for drawing canvas)
+            const eyeX = w1 * 0.1;
+            const seaLevelBase = h1 * 0.8;
+            const eyeY = seaLevelBase - 15;
+            const maxDistX = w1 * 0.9;
+            const minDistX = w1 * 0.3;
+            const shipX = minDistX + ((state.distance - 10) / 90) * (maxDistX - minDistX);
+            const earthDrop = Math.pow((shipX - w1/2)/100, 2) * 2; 
+            const shipY = seaLevelBase - 15 + earthDrop;
+
+
+            // --- 1. Side View Rendering (NO RAYS) ---
+            sideCtx.clearRect(0, 0, w1, h1);
+            drawAtmosphereAndEarth(sideCtx, w1, h1);
+            drawEye(sideCtx, eyeX, eyeY);
+            drawShip(sideCtx, shipX, shipY, 1.0);
+            
+            // NOTE: Rays are removed here as requested for the puzzle.
+
+
+            // --- 2. Subjective View Rendering (POV) ---
+            const w2 = povCanvas.width;
+            const h2 = povCanvas.height;
+            povCtx.clearRect(0, 0, w2, h2);
+
+            // Sky & Sea
+            const skyGrad = povCtx.createLinearGradient(0, 0, 0, h2);
+            skyGrad.addColorStop(0, '#7dd3fc');
+            skyGrad.addColorStop(1, '#f0f9ff');
+            povCtx.fillStyle = skyGrad;
+            povCtx.fillRect(0, 0, w2, h2);
+            
+            const horizonY = h2 * 0.6;
+            povCtx.fillStyle = '#0c4a6e';
+            povCtx.fillRect(0, horizonY, w2, h2 - horizonY);
+
+            // Wave animation
+            povCtx.strokeStyle = '#38bdf8';
+            povCtx.lineWidth = 1;
+            povCtx.globalAlpha = 0.3;
+            for(let i=0; i<5; i++) {
+                const waveY = horizonY + 20 + i * 15;
+                povCtx.beginPath();
+                for(let x=0; x<w2; x+=20) {
+                    povCtx.lineTo(x, waveY + Math.sin(x*0.05 + state.time + i)*3);
+                }
+                povCtx.stroke();
+            }
+            povCtx.globalAlpha = 1.0;
+
+            // Ships in POV
+            const povScale = 30 / state.distance; 
+            const povShipX = w2 / 2;
+            const earthDropPOV = (state.distance > 30) ? (state.distance - 30) * 1.5 : 0;
+            const realShipPovY = horizonY + 10 + earthDropPOV; 
+            
+            // Draw real ship (faded)
+            drawShip(povCtx, povShipX, realShipPovY, povScale, 0.3); 
+            
+            // Draw Mirage
+            const liftAmount = (state.strength * state.distance) * 0.08; 
+            const mirageY = realShipPovY - liftAmount;
+            
+            povCtx.save();
+            povCtx.translate(povShipX, mirageY);
+            let stretchY = 1.0;
+            if (state.strength > 60) stretchY = 1.0 + (state.strength - 60) * 0.05;
+            povCtx.scale(povScale, povScale * stretchY);
+            
+            if (state.strength > 5) {
+                // Manually draw ship parts again to apply scale
+                povCtx.fillStyle = '#1e293b';
+                povCtx.beginPath();
+                povCtx.moveTo(-20, 0); ctx = povCtx; // alias
+                ctx.lineTo(20, 0); ctx.lineTo(15, 10); ctx.lineTo(-15, 10); ctx.fill();
+                ctx.fillStyle = '#cbd5e1'; ctx.fillRect(-10, -10, 15, 10);
+                ctx.strokeStyle = '#475569'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, -25); ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(2, -23); ctx.lineTo(12, -15); ctx.lineTo(2, -12); ctx.fill();
+                if(state.strength > 80) ctx.filter = 'blur(2px)';
+            }
+            povCtx.restore();
+
+            // Text
+            povCtx.fillStyle = '#0f172a';
+            povCtx.font = '14px Noto Sans TC';
+            povCtx.textAlign = 'left';
+            povCtx.fillText(`距離: ${state.distance}km`, 20, 30);
+            if (mirageY < horizonY - 10) {
+                povCtx.fillStyle = '#dc2626';
+                povCtx.font = 'bold 16px Noto Sans TC';
+                povCtx.fillText('⚠️ 觀測到懸浮影像', 20, 60);
+            }
+
+
+            // --- 3. Drawing Canvas (Task Area) ---
+            // This canvas mirrors the Side View layout so students can draw on it
+            const dw = drawCanvas.width;
+            const dh = drawCanvas.height;
+            drawCtx.clearRect(0, 0, dw, dh);
+            
+            // 3.1 Draw Background Scene (Same as Side View)
+            drawAtmosphereAndEarth(drawCtx, dw, dh);
+
+            // Re-calc positions for drawing canvas dimensions
+            const dEyeX = dw * 0.1;
+            const dSeaLevel = dh * 0.8;
+            const dEyeY = dSeaLevel - 15;
+            const dMaxX = dw * 0.9;
+            const dMinX = dw * 0.3;
+            const dShipX = dMinX + ((state.distance - 10) / 90) * (dMaxX - dMinX);
+            const dEarthDrop = Math.pow((dShipX - dw/2)/100, 2) * 2;
+            const dShipY = dSeaLevel - 15 + dEarthDrop;
+
+            drawEye(drawCtx, dEyeX, dEyeY);
+            drawShip(drawCtx, dShipX, dShipY, 1.0);
+
+            // 3.2 Draw User Strokes
+            drawCtx.lineCap = 'round';
+            drawCtx.lineJoin = 'round';
+            drawCtx.lineWidth = 3;
+            
+            // Draw stored strokes
+            for (const stroke of strokes) {
+                if (stroke.points.length < 1) continue;
+                drawCtx.beginPath();
+                drawCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                for (let i = 1; i < stroke.points.length; i++) {
+                    drawCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                }
+                drawCtx.strokeStyle = stroke.color; // Use stored color
+                drawCtx.stroke();
+            }
+
+            // Draw current stroke
+            if (isDrawing && currentStrokePoints.length > 0) {
+                drawCtx.beginPath();
+                drawCtx.moveTo(currentStrokePoints[0].x, currentStrokePoints[0].y);
+                for (let i = 1; i < currentStrokePoints.length; i++) {
+                    drawCtx.lineTo(currentStrokePoints[i].x, currentStrokePoints[i].y);
+                }
+                drawCtx.strokeStyle = currentColor; // Use current color
+                drawCtx.stroke();
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        render();
+
+    </script>
+</body>
+</html>

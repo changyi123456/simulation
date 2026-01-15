@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>波的疊加原理互動模擬器 - 簡潔實驗版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; overflow-x: hidden; }
+        canvas { width: 100%; height: 420px; background: #1e293b; border-radius: 1rem; border: 1px solid #334155; }
+        .control-panel { background: #1e293b; padding: 1rem; border-radius: 1rem; border: 1px solid #334155; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #3b82f6; }
+        .btn-active { background-color: #3b82f6 !important; color: white; border: 1px solid rgba(255,255,255,0.3); }
+        label { font-size: 0.7rem; color: #94a3b8; margin-bottom: 0.15rem; display: block; }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-white">繩波疊加實驗室</h1>
+            <div class="flex gap-2">
+                <button id="modePulse" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold transition btn-active text-xs">自動相撞模式</button>
+                <button id="modeFree" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold transition text-xs">自由實驗模式</button>
+            </div>
+        </header>
+
+        <!-- 畫布區域 -->
+        <div class="relative mb-4">
+            <canvas id="superCanvas"></canvas>
+            <div class="absolute top-4 left-4 flex flex-row gap-6 bg-black/40 p-2 rounded-lg backdrop-blur-sm text-[10px] border border-white/10">
+                <div class="flex items-center gap-2"><div class="w-5 h-1 bg-green-400 shadow-[0_0_5px_#4ade80]"></div> 繩波 A</div>
+                <div class="flex items-center gap-2"><div class="w-5 h-1 bg-red-400 shadow-[0_0_5px_#f87171]"></div> 繩波 B</div>
+                <div class="flex items-center gap-2"><div class="w-5 h-1 bg-blue-400 border border-white/50 shadow-[0_0_5px_#60a5fa]"></div> 合成波 (A+B)</div>
+            </div>
+        </div>
+
+        <!-- 操控區域：變寬且高度縮小 -->
+        <div class="control-panel">
+            <!-- 脈衝模式控制 (自動相撞) -->
+            <div id="pulseControls" class="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
+                <div class="flex flex-col gap-1">
+                    <label>相撞方式</label>
+                    <div class="flex gap-1">
+                        <button id="pulseConstructive" class="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] transition">都在上方</button>
+                        <button id="pulseDestructive" class="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] btn-active transition">一上一下</button>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label>操作控制</label>
+                    <div class="flex gap-1">
+                        <button id="pulsePlay" class="flex-[1.5] py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded font-bold text-xs shadow-lg">🚀 發射</button>
+                        <button id="pauseBtn" class="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 rounded font-bold text-xs shadow-lg transition">⏸ 暫停</button>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label>移動速度</label>
+                    <input type="range" id="speedRange" min="0.1" max="1.5" value="0.5" step="0.1">
+                </div>
+            </div>
+
+            <!-- 自由模式控制 (手動調整兩段脈衝波) -->
+            <div id="freeControls" class="hidden grid grid-cols-1 md:grid-cols-2 gap-10">
+                <!-- 繩波 A 控制 -->
+                <div class="grid grid-cols-3 gap-4 p-2 bg-green-900/10 rounded-lg border border-green-500/20 items-center">
+                    <div class="col-span-3 mb-1 flex justify-between items-center">
+                        <h4 class="text-green-400 text-[10px] font-bold uppercase tracking-wider">繩波 A (綠)</h4>
+                        <span class="text-[10px] text-slate-500 italic">調整滑桿觀察變形</span>
+                    </div>
+                    <div>
+                        <label>高矮 (振幅): <span id="ampALabel" class="text-white">1.0</span></label>
+                        <input type="range" id="ampARange" min="-1.5" max="1.5" value="1.0" step="0.1">
+                    </div>
+                    <div>
+                        <label>寬窄 (寬度): <span id="widthALabel" class="text-white">80</span></label>
+                        <input type="range" id="widthARange" min="30" max="200" value="80" step="5">
+                    </div>
+                    <div>
+                        <label>左右位置</label>
+                        <input type="range" id="posARange" min="0" max="100" value="35" step="0.5">
+                    </div>
+                </div>
+
+                <!-- 繩波 B 控制 -->
+                <div class="grid grid-cols-3 gap-4 p-2 bg-red-900/10 rounded-lg border border-red-500/20 items-center">
+                    <div class="col-span-3 mb-1 flex justify-between items-center">
+                        <h4 class="text-red-400 text-[10px] font-bold uppercase tracking-wider">繩波 B (紅)</h4>
+                        <span class="text-[10px] text-slate-500 italic">左右挪動對齊 A 波</span>
+                    </div>
+                    <div>
+                        <label>高矮 (振幅): <span id="ampBLabel" class="text-white">-1.0</span></label>
+                        <input type="range" id="ampBRange" min="-1.5" max="1.5" value="-1.0" step="0.1">
+                    </div>
+                    <div>
+                        <label>寬窄 (寬度): <span id="widthBLabel" class="text-white">80</span></label>
+                        <input type="range" id="widthBRange" min="30" max="200" value="80" step="5">
+                    </div>
+                    <div>
+                        <label>左右位置</label>
+                        <input type="range" id="posBRange" min="0" max="100" value="65" step="0.5">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('superCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        function resize() {
+            width = canvas.clientWidth;
+            height = canvas.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let mode = 'pulse'; 
+        let isPulsing = false;
+        let isPaused = false;
+        let pulseTime = 0;
+        let pulseType = 'destructive'; 
+        let simulationSpeed = 0.5;
+
+        // 自由模式參數
+        let freeParams = {
+            ampA: 1.0, widthA: 80, posA: 35,
+            ampB: -1.0, widthB: 80, posB: 65
+        };
+
+        function getPulseY(x, centerX, widthScale, amplitude) {
+            const dist = x - centerX;
+            if (Math.abs(dist) > widthScale) return 0;
+            const k = Math.PI / widthScale;
+            let val = Math.sin(k * (dist + widthScale) / 2) * Math.sin(Math.PI * (dist + widthScale) / widthScale);
+            return val * amplitude * 100;
+        }
+
+        function draw() {
+            if (!isPaused && mode === 'pulse' && isPulsing) {
+                pulseTime += simulationSpeed;
+                if (pulseTime * 5 > width + 400) {
+                    isPulsing = false;
+                    pulseTime = 0;
+                }
+            }
+
+            ctx.clearRect(0, 0, width, height);
+            const centerY = height / 2;
+            const waveAY = new Array(Math.floor(width)).fill(0);
+            const waveBY = new Array(Math.floor(width)).fill(0);
+
+            if (mode === 'pulse') {
+                const centerA = pulseTime * 5 - 100;
+                const centerB = width - (pulseTime * 5) + 100;
+                
+                for (let x = 0; x < width; x++) {
+                    waveAY[x] = getPulseY(x, centerA, 80, 1.0);
+                    waveBY[x] = getPulseY(x, centerB, 80, pulseType === 'destructive' ? -1.0 : 1.0);
+                }
+            } else {
+                const centerA = (freeParams.posA / 100) * width;
+                const centerB = (freeParams.posB / 100) * width;
+                
+                for (let x = 0; x < width; x++) {
+                    waveAY[x] = getPulseY(x, centerA, freeParams.widthA, freeParams.ampA);
+                    waveBY[x] = getPulseY(x, centerB, freeParams.widthB, freeParams.ampB);
+                }
+            }
+
+            // 繪製 A (綠)
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.strokeStyle = '#4ade80';
+            ctx.globalAlpha = 0.5;
+            for (let x = 0; x < width; x++) {
+                if (x === 0) ctx.moveTo(x, centerY + waveAY[x]); else ctx.lineTo(x, centerY + waveAY[x]);
+            }
+            ctx.stroke();
+
+            // 繪製 B (紅)
+            ctx.beginPath();
+            ctx.strokeStyle = '#f87171';
+            for (let x = 0; x < width; x++) {
+                if (x === 0) ctx.moveTo(x, centerY + waveBY[x]); else ctx.lineTo(x, centerY + waveBY[x]);
+            }
+            ctx.stroke();
+
+            // 繪製合成 (藍)
+            ctx.beginPath();
+            ctx.strokeStyle = '#60a5fa';
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = 6;
+            for (let x = 0; x < width; x++) {
+                const sumY = waveAY[x] + waveBY[x];
+                if (x === 0) ctx.moveTo(x, centerY + sumY); else ctx.lineTo(x, centerY + sumY);
+            }
+            ctx.stroke();
+
+            // 基準線
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1;
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(width, centerY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            requestAnimationFrame(draw);
+        }
+
+        // --- 事件綁定 ---
+
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            isPaused = !isPaused;
+            this.innerText = isPaused ? "▶ 繼續" : "⏸ 暫停";
+            this.classList.toggle('bg-amber-600', !isPaused);
+            this.classList.toggle('bg-emerald-600', isPaused);
+        });
+
+        document.getElementById('modePulse').addEventListener('click', function() {
+            mode = 'pulse';
+            this.classList.add('btn-active');
+            document.getElementById('modeFree').classList.remove('btn-active');
+            document.getElementById('pulseControls').classList.remove('hidden');
+            document.getElementById('freeControls').classList.add('hidden');
+            isPulsing = false;
+        });
+
+        document.getElementById('modeFree').addEventListener('click', function() {
+            mode = 'free';
+            isPaused = false; // 自由模式不設暫停
+            this.classList.add('btn-active');
+            document.getElementById('modePulse').classList.remove('btn-active');
+            document.getElementById('pulseControls').classList.add('hidden');
+            document.getElementById('freeControls').classList.remove('hidden');
+        });
+
+        document.getElementById('pulsePlay').addEventListener('click', () => {
+            pulseTime = 0; isPulsing = true; isPaused = false;
+            const pb = document.getElementById('pauseBtn');
+            pb.innerText = "⏸ 暫停";
+            pb.classList.add('bg-amber-600');
+            pb.classList.remove('bg-emerald-600');
+        });
+
+        document.getElementById('pulseConstructive').addEventListener('click', function() {
+            pulseType = 'constructive';
+            this.classList.add('btn-active');
+            document.getElementById('pulseDestructive').classList.remove('btn-active');
+        });
+
+        document.getElementById('pulseDestructive').addEventListener('click', function() {
+            pulseType = 'destructive';
+            this.classList.add('btn-active');
+            document.getElementById('pulseConstructive').classList.remove('btn-active');
+        });
+
+        const bindRange = (id, labelId, key) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                freeParams[key] = val;
+                if (labelId) {
+                    const label = document.getElementById(labelId);
+                    if (label) label.innerText = val;
+                }
+            });
+        };
+
+        bindRange('ampARange', 'ampALabel', 'ampA');
+        bindRange('widthARange', 'widthALabel', 'widthA');
+        bindRange('posARange', null, 'posA');
+        bindRange('ampBRange', 'ampBLabel', 'ampB');
+        bindRange('widthBRange', 'widthBLabel', 'widthB');
+        bindRange('posBRange', null, 'posB');
+
+        document.getElementById('speedRange').addEventListener('input', (e) => {
+            simulationSpeed = parseFloat(e.target.value);
+        });
+
+        draw();
+    </script>
+</body>
+</html>

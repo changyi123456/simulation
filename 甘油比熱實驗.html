@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>進階比熱實驗：甘油測量</title>
+    
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 載入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 載入 PropTypes (Recharts 的必要依賴，修復 oneOfType 錯誤) -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    
+    <!-- 載入 Recharts (圖表庫) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js"></script>
+    
+    <!-- 載入 Babel (用於解析 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* 避免捲軸在嵌入時造成雙重捲動 */
+        body { margin: 0; padding: 0; overflow: hidden; }
+        #root { height: 100vh; width: 100vw; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // 解構 React Hooks
+        const { useState, useEffect, useRef, useMemo } = React;
+        
+        // 確保 Recharts 已正確載入
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts || {};
+
+        // --- 內建圖標元件 (取代 lucide-react 依賴以修復錯誤) ---
+        const IconBase = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Play = (props) => <IconBase {...props}><polygon points="5 3 19 12 5 21 5 3" /></IconBase>;
+        const Pause = (props) => <IconBase {...props}><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></IconBase>;
+        const RotateCcw = (props) => <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></IconBase>;
+        const Save = (props) => <IconBase {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></IconBase>;
+        const Flame = (props) => <IconBase {...props}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></IconBase>;
+        const Calculator = (props) => <IconBase {...props}><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" x2="16" y1="6" y2="6" /><line x1="16" x2="16" y1="14" y2="18" /><path d="M16 10h.01" /><path d="M12 10h.01" /><path d="M8 10h.01" /><path d="M12 14h.01" /><path d="M8 14h.01" /><path d="M12 18h.01" /><path d="M8 18h.01" /></IconBase>;
+        const TrendingUp = (props) => <IconBase {...props}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></IconBase>;
+        const Info = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></IconBase>;
+        const FlaskConical = (props) => <IconBase {...props}><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2" /><path d="M8.5 2h7" /><path d="M7 16h10" /></IconBase>;
+
+        const SpecificHeatLabAdvanced = () => {
+            // --- 狀態管理 ---
+            const [isRunning, setIsRunning] = useState(false);
+            const [time, setTime] = useState(0); // 秒
+            const [temperature, setTemperature] = useState(25.0); // 攝氏
+            const [mass, setMass] = useState(200); // 液體質量 (g)
+            const [hasLid, setHasLid] = useState(false); // 是否加蓋
+            const [liquidType, setLiquidType] = useState('water'); // 'water' 或 'glycerin'
+            const [recordedData, setRecordedData] = useState([]); // 紀錄的數據點
+            const [showFit, setShowFit] = useState(false); // 顯示擬合線
+
+            // --- 物理常數 ---
+            const SPECIFIC_HEAT_WATER = 1.0; // cal/g°C
+            const SPECIFIC_HEAT_GLYCERIN = 0.58; // cal/g°C (甘油比熱)
+            
+            // 內部設定火源功率 (未知數 X)
+            const INPUT_POWER = 30.0; // cal/s
+            
+            const AMBIENT_TEMP = 25.0; // 環境溫度
+            const DT = 0.1; // 模擬時間步長 (秒)
+
+            // --- 散熱係數 ---
+            const COEFF_CONVECTION = 0.04; // cal/s/°C
+            // 甘油較黏稠且沸點高，蒸發效應比水低很多，這裡設定其蒸發係數較小
+            const COEFF_EVAPORATION_WATER = 0.5; 
+            const COEFF_EVAPORATION_GLYCERIN = 0.1; 
+
+            const requestRef = useRef();
+
+            // --- 物理模擬核心 Loop ---
+            const animate = () => {
+                if (isRunning) {
+                setTemperature((prevTemp) => {
+                    // 0. 取得當前液體物理性質
+                    const currentS = liquidType === 'water' ? SPECIFIC_HEAT_WATER : SPECIFIC_HEAT_GLYCERIN;
+                    const currentEvapCoeff = liquidType === 'water' ? COEFF_EVAPORATION_WATER : COEFF_EVAPORATION_GLYCERIN;
+                    
+                    // 1. 計算散熱
+                    const deltaT = prevTemp - AMBIENT_TEMP;
+                    if (deltaT < 0) return AMBIENT_TEMP;
+
+                    const p_convection = COEFF_CONVECTION * deltaT;
+                    const lidFactor = hasLid ? 0.05 : 1.0; 
+                    
+                    // 蒸發模型 (簡易)
+                    const p_evaporation = lidFactor * currentEvapCoeff * (Math.exp(0.055 * prevTemp) - Math.exp(0.055 * AMBIENT_TEMP));
+                    
+                    const p_total_loss = p_convection + p_evaporation;
+
+                    // 2. 計算淨功率與溫升
+                    const p_net = INPUT_POWER - p_total_loss;
+                    const dT = (p_net * DT) / (mass * currentS);
+
+                    let nextTemp = prevTemp + dT;
+
+                    // 3. 沸點限制 (水=100，甘油=290但這裡不限制因為很難燒到)
+                    if (liquidType === 'water' && nextTemp >= 100) {
+                        nextTemp = 100;
+                    }
+                    
+                    return nextTemp;
+                });
+
+                setTime((prevTime) => prevTime + DT);
+                requestRef.current = requestAnimationFrame(animate);
+                }
+            };
+
+            useEffect(() => {
+                if (isRunning) {
+                requestRef.current = requestAnimationFrame(animate);
+                } else {
+                cancelAnimationFrame(requestRef.current);
+                }
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [isRunning, mass, hasLid, liquidType]);
+
+            // --- 輔助功能 ---
+            const handleReset = () => {
+                setIsRunning(false);
+                setTime(0);
+                setTemperature(25.0);
+                setRecordedData([]);
+                setShowFit(false);
+            };
+
+            // 切換液體時重置
+            const handleLiquidChange = (type) => {
+                setLiquidType(type);
+                handleReset();
+            };
+
+            const handleRecord = () => {
+                setRecordedData([
+                ...recordedData,
+                { 
+                    id: Date.now(),
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)) 
+                }
+                ]);
+            };
+
+            // --- 線性回歸計算 ---
+            const linearFit = useMemo(() => {
+                if (recordedData.length < 2) return null;
+
+                const n = recordedData.length;
+                let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+                recordedData.forEach(p => {
+                sumX += p.time;
+                sumY += p.temp;
+                sumXY += p.time * p.temp;
+                sumXX += p.time * p.time;
+                });
+
+                const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                const intercept = (sumY - slope * sumX) / n;
+                const minTime = recordedData[0].time;
+                const maxTime = recordedData[n - 1].time;
+
+                return {
+                slope: slope,
+                intercept: intercept,
+                points: [
+                    { time: minTime, fitTemp: slope * minTime + intercept },
+                    { time: maxTime, fitTemp: slope * maxTime + intercept }
+                ]
+                };
+            }, [recordedData]);
+
+            // --- 視覺參數 ---
+            const waterHeight = Math.min(185, (mass / 500) * 150 + 30);
+            // 顏色切換：水(藍色), 甘油(淡黃色黏稠感)
+            const fluidColor = liquidType === 'water' 
+                ? `rgba(${Math.min(255, 100 + (temperature - 25) * 2)}, 149, 237, 0.6)`
+                : `rgba(255, 240, 150, 0.7)`; // 甘油顏色
+
+            if (!LineChart) {
+                return <div className="flex items-center justify-center h-screen text-red-600 font-bold">Error: 圖表庫 (Recharts) 載入失敗，請檢查網路連線或稍後再試。</div>;
+            }
+
+            return (
+                <div className="flex flex-col h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
+                {/* 標題列 */}
+                <header className="bg-emerald-700 text-white p-4 shadow-md flex justify-between items-center z-10 shrink-0">
+                    <div className="flex items-center gap-2">
+                    <FlaskConical className="w-6 h-6 text-yellow-300" />
+                    <h1 className="text-xl font-bold tracking-wide">進階實驗：測量未知液體(甘油)比熱</h1>
+                    </div>
+                    <div className="text-sm bg-emerald-800 px-3 py-1 rounded-full border border-emerald-500">
+                    火源功率: <span className="font-mono font-bold text-yellow-300 text-lg">X</span> cal/s (未知)
+                    </div>
+                </header>
+
+                <main className="flex flex-1 overflow-hidden">
+                    {/* 左側：模擬區與控制區 */}
+                    <div className="w-1/2 flex flex-col border-r border-gray-200 bg-white p-4 overflow-y-auto">
+                    
+                    {/* 1. 視覺模擬場景 */}
+                    <div className="relative h-96 bg-gray-100 rounded-xl border border-gray-300 mb-4 flex justify-center items-end pb-2 shadow-inner overflow-hidden">
+                        
+                        {/* 標籤：顯示目前液體 */}
+                        <div className="absolute top-4 left-4 z-20 bg-white/80 backdrop-blur px-3 py-1 rounded border border-gray-300 shadow-sm text-sm font-bold text-gray-700">
+                            當前液體: {liquidType === 'water' ? '💧 水 (Water)' : '🧪 甘油 (Glycerin)'}
+                        </div>
+
+                        {/* 裝置群組 */}
+                        <div className="flex flex-col items-center mb-4">
+                        
+                        {/* === 燒杯模組 === */}
+                        <div className="relative w-32 h-48 mb-1">
+                            
+                            {/* 溫度計 */}
+                            <div 
+                            className="absolute left-1/2 -translate-x-1/2 z-30 flex flex-col items-center" 
+                            style={{ 
+                                bottom: '20px', 
+                                height: '240px' 
+                            }}
+                            >
+                            <div className="w-2 flex-1 bg-yellow-50 border border-gray-400 rounded-t-lg relative shadow-sm">
+                                <div 
+                                className="absolute bottom-0 w-full bg-red-500 transition-all duration-100 ease-linear rounded-b-sm"
+                                style={{ height: `${Math.max(5, (temperature / 120) * 100)}%` }}
+                                ></div>
+                                {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((pos) => (
+                                <div key={pos} className="absolute right-0 w-1 h-[1px] bg-black/30" style={{ bottom: `${pos}%` }}></div> 
+                                ))}
+                            </div>
+                            <div className="w-4 h-4 rounded-full bg-red-600 -mt-1 border border-gray-400 shadow-sm relative z-30"></div>
+                            
+                            <div className="absolute -right-20 top-2 bg-black/80 text-white text-[10px] px-2 py-0.5 rounded font-mono">
+                                T = {temperature.toFixed(1)}°C
+                            </div>
+                            </div>
+
+                            {/* 蓋子 */}
+                            {hasLid && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-[136px] h-4 bg-gray-500 rounded-sm z-20 shadow-md border border-gray-600 flex justify-center items-center">
+                                <div className="w-8 h-1 bg-gray-700 rounded-full opacity-50"></div>
+                            </div>
+                            )}
+
+                            {/* 燒杯本體 */}
+                            <div className="w-full h-full border-x-2 border-b-2 border-gray-400 rounded-b-xl relative bg-white/30 backdrop-blur-[1px] overflow-hidden z-10">
+                            {/* 液體 */}
+                            <div 
+                                className="absolute bottom-0 w-full transition-all duration-500"
+                                style={{ 
+                                height: `${waterHeight}px`, 
+                                backgroundColor: fluidColor 
+                                }}
+                            >
+                                {/* 沸騰氣泡 (僅水在100度時發生) */}
+                                {liquidType === 'water' && temperature >= 100 && isRunning && (
+                                <div className="w-full h-full relative overflow-hidden opacity-70">
+                                    <div className="absolute bottom-2 left-4 w-2 h-2 bg-white rounded-full animate-ping"></div>
+                                    <div className="absolute bottom-6 right-8 w-2 h-2 bg-white rounded-full animate-bounce"></div>
+                                    <div className="absolute bottom-10 left-10 w-3 h-3 bg-white/50 rounded-full animate-pulse"></div>
+                                </div>
+                                )}
+                            </div>
+
+                            {/* 刻度 */}
+                            <div className="absolute right-0 bottom-10 w-3 h-[1px] bg-gray-600"></div>
+                            <div className="absolute right-0 bottom-24 w-4 h-[1px] bg-gray-600"></div>
+                            <div className="absolute right-0 bottom-38 w-3 h-[1px] bg-gray-600"></div>
+                            </div>
+
+                            {/* 蒸氣 (水且無蓋時顯示) */}
+                            {liquidType === 'water' && !hasLid && temperature > 60 && isRunning && (
+                            <div className="absolute -top-16 left-0 w-full flex justify-center opacity-40 pointer-events-none z-0">
+                                <div className="w-2 h-12 bg-gray-400 rounded-full blur-lg animate-pulse" style={{ animationDuration: '1s' }}></div>
+                            </div>
+                            )}
+                        </div>
+
+                        {/* 鐵架台網子 */}
+                        <div className="w-40 h-1 bg-gray-700 mx-auto rounded-full z-0 shadow-sm"></div>
+
+                        {/* 酒精燈 */}
+                        <div className="flex flex-col items-center mt-12 relative">
+                            <div className={`transition-opacity duration-300 absolute -top-12 left-1/2 -translate-x-1/2 ${isRunning ? 'opacity-100' : 'opacity-0'}`}>
+                            <div className="relative">
+                                <div className="w-5 h-12 bg-orange-500 rounded-full blur-[3px] animate-pulse absolute top-0 left-1/2 -translate-x-1/2"></div>
+                                <div className="w-3 h-8 bg-yellow-200 rounded-full blur-[1px] absolute top-2 left-1/2 -translate-x-1/2"></div>
+                            </div>
+                            </div>
+                            <div className="w-3 h-4 bg-yellow-900/90 rounded-sm -mt-2 relative z-10"></div>
+                            <div className="w-20 h-14 bg-gray-200 border-2 border-gray-400 rounded-b-xl rounded-t-md shadow-sm relative overflow-hidden flex items-end justify-center z-10">
+                                <div className="w-full h-10 bg-blue-300/40"></div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
+                    {/* 2. 控制面板 */}
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4 shrink-0">
+                        
+                        {/* 液體與質量設定 */}
+                        <div className="space-y-3">
+                            {/* 液體選擇 */}
+                            <div className="flex items-center gap-4 bg-gray-50 p-2 rounded border border-gray-200">
+                                <span className="text-sm font-bold text-gray-700">選擇液體:</span>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" 
+                                        name="liquid" 
+                                        value="water" 
+                                        checked={liquidType === 'water'}
+                                        disabled={isRunning || recordedData.length > 0}
+                                        onChange={() => handleLiquidChange('water')}
+                                        className="text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm">水 (Water)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" 
+                                        name="liquid" 
+                                        value="glycerin" 
+                                        checked={liquidType === 'glycerin'}
+                                        disabled={isRunning || recordedData.length > 0}
+                                        onChange={() => handleLiquidChange('glycerin')}
+                                        className="text-yellow-600 focus:ring-yellow-500"
+                                    />
+                                    <span className="text-sm">甘油 (Glycerin)</span>
+                                </label>
+                            </div>
+
+                            {/* 質量與器材 */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">液體質量 (m)</label>
+                                    <div className="flex items-center gap-2">
+                                    <input 
+                                        type="range" 
+                                        min="100" 
+                                        max="500" 
+                                        step="50" 
+                                        value={mass}
+                                        disabled={isRunning || recordedData.length > 0}
+                                        onChange={(e) => setMass(Number(e.target.value))}
+                                        className="w-full cursor-pointer accent-emerald-600"
+                                    />
+                                    <span className="text-sm font-mono bg-emerald-50 text-emerald-800 px-2 py-1 rounded font-bold">{mass} g</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-center justify-end">
+                                    <button 
+                                    onClick={() => setHasLid(!hasLid)}
+                                    disabled={isRunning || recordedData.length > 0}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm w-full ${
+                                        hasLid 
+                                        ? 'bg-gray-700 text-white ring-2 ring-gray-400 ring-offset-1' 
+                                        : 'bg-white text-gray-500 border border-gray-300 hover:bg-gray-100'
+                                    }`}
+                                    >
+                                    {hasLid ? '已加蓋 (Lid ON)' : '無蓋子 (Lid OFF)'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 操作按鈕 */}
+                        <div className="flex gap-2 pt-2 border-t">
+                        {!isRunning ? (
+                            <button 
+                            onClick={() => setIsRunning(true)}
+                            className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all"
+                            >
+                            <Play className="w-5 h-5 fill-current" /> 點火加熱
+                            </button>
+                        ) : (
+                            <button 
+                            onClick={() => setIsRunning(false)}
+                            className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all"
+                            >
+                            <Pause className="w-5 h-5 fill-current" /> 暫停實驗
+                            </button>
+                        )}
+                        
+                        <button 
+                            onClick={handleRecord}
+                            disabled={!isRunning && time === 0}
+                            className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Save className="w-5 h-5" /> 紀錄數據
+                        </button>
+
+                        <button 
+                            onClick={handleReset}
+                            className="flex items-center justify-center px-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold transition-colors"
+                            title="重置實驗"
+                        >
+                            <RotateCcw className="w-5 h-5" />
+                        </button>
+                        </div>
+                        
+                        {/* 當前狀態 */}
+                        <div className="grid grid-cols-2 gap-4 text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wider">加熱時間 (t)</div>
+                            <div className="text-2xl font-mono font-bold text-gray-800">{time.toFixed(1)} <span className="text-sm text-gray-500 font-normal">s</span></div>
+                        </div>
+                        <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wider">當前溫度 (T)</div>
+                            <div className="text-2xl font-mono font-bold text-red-600">{temperature.toFixed(2)} <span className="text-sm text-gray-500 font-normal">°C</span></div>
+                        </div>
+                        </div>
+
+                    </div>
+                    </div>
+
+                    {/* 右側：數據與圖表區 */}
+                    <div className="w-1/2 flex flex-col p-4 bg-gray-50 overflow-y-auto">
+                    
+                    {/* 1. 圖表區 */}
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-4 flex-none h-[400px] relative">
+                        <div className="flex justify-between items-center mb-2">
+                        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-emerald-600" />
+                            {liquidType === 'water' ? '水' : '甘油'}：溫度-時間 關係圖
+                        </h2>
+                        <button 
+                            onClick={() => setShowFit(!showFit)}
+                            disabled={recordedData.length < 2}
+                            className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
+                            showFit 
+                            ? 'bg-purple-100 text-purple-700 border-purple-300' 
+                            : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                            } disabled:opacity-30`}
+                        >
+                            <Calculator className="w-3 h-3" />
+                            {showFit ? '隱藏擬合線' : '顯示線性擬合'}
+                        </button>
+                        </div>
+
+                        <ResponsiveContainer width="100%" height="90%">
+                        <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <XAxis 
+                            dataKey="time" 
+                            type="number" 
+                            domain={[0, 'auto']} 
+                            label={{ value: '時間 t (s)', position: 'bottom', offset: 0 }} 
+                            />
+                            <YAxis 
+                            domain={[20, 'auto']} 
+                            label={{ value: '溫度 T (°C)', angle: -90, position: 'insideLeft' }} 
+                            />
+                            <Tooltip 
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value) => `${value} °C`}
+                            labelFormatter={(label) => `${label} s`}
+                            />
+                            <Legend verticalAlign="top" height={36}/>
+                            
+                            <Line 
+                            data={recordedData} 
+                            type="monotone" 
+                            dataKey="temp" 
+                            name={liquidType === 'water' ? '水 (實測)' : '甘油 (實測)'}
+                            stroke={liquidType === 'water' ? '#2563eb' : '#d97706'} 
+                            strokeWidth={2}
+                            dot={{ r: 4, fill: liquidType === 'water' ? '#2563eb' : '#d97706', strokeWidth: 2, stroke: "#fff" }}
+                            activeDot={{ r: 6 }}
+                            isAnimationActive={false}
+                            />
+
+                            {showFit && linearFit && (
+                            <Line
+                                data={linearFit.points}
+                                dataKey="fitTemp"
+                                name="線性擬合"
+                                stroke="#9333ea"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                dot={false}
+                                isAnimationActive={false}
+                            />
+                            )}
+                        </LineChart>
+                        </ResponsiveContainer>
+                        
+                        {/* 擬合結果浮層 */}
+                        {showFit && linearFit && (
+                        <div className="absolute top-14 right-14 bg-white/95 backdrop-blur border border-purple-300 p-4 rounded-lg shadow-xl text-purple-900 z-10 w-64">
+                            <p className="font-bold border-b border-purple-200 pb-2 mb-2 text-base">數據分析</p>
+                            <div className="space-y-1 text-sm">
+                            <p className="flex justify-between">
+                                <span>斜率 (Slope):</span>
+                                <span className="font-mono font-bold">{linearFit.slope.toFixed(4)}</span>
+                            </p>
+                            
+                            {/* 實驗思考指引已移除，保留純淨數據供學生思考 */}
+                            </div>
+                        </div>
+                        )}
+                    </div>
+
+                    {/* 2. 數據紀錄表 */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0">
+                        <div className="p-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center shrink-0">
+                        <span>數據紀錄表 ({liquidType === 'water' ? '水' : '甘油'})</span>
+                        <span className="text-xs font-normal text-gray-500 flex items-center gap-1">
+                            <Info className="w-3 h-3"/> 
+                            切換液體會清空表格
+                        </span>
+                        </div>
+                        <div className="overflow-auto flex-1">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10">
+                            <tr>
+                                <th className="px-4 py-3">#</th>
+                                <th className="px-4 py-3">時間 (s)</th>
+                                <th className="px-4 py-3">溫度 (°C)</th>
+                                <th className="px-4 py-3 text-right">升溫 ΔT</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {recordedData.length === 0 ? (
+                                <tr>
+                                <td colSpan="4" className="text-center py-10 text-gray-400 italic">
+                                    尚未記錄數據...
+                                </td>
+                                </tr>
+                            ) : (
+                                recordedData.map((row, index) => (
+                                <tr key={row.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
+                                    <td className="px-4 py-2 font-medium text-gray-500">{index + 1}</td>
+                                    <td className="px-4 py-2 font-mono">{row.time.toFixed(1)}</td>
+                                    <td className="px-4 py-2 font-mono font-bold text-gray-800">{row.temp.toFixed(2)}</td>
+                                    <td className="px-4 py-2 font-mono text-right text-gray-500">
+                                    {(row.temp - 25).toFixed(2)}
+                                    </td>
+                                </tr>
+                                ))
+                            )}
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+
+                    </div>
+                </main>
+                </div>
+            );
+        };
+
+        // 渲染元件到 DOM
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<SpecificHeatLabAdvanced />);
+    </script>
+</body>
+</html>

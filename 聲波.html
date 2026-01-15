@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聲波特性：縱波、橫波與真實音效</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; overflow-x: hidden; }
+        canvas { width: 100%; height: 420px; background: #020617; border-radius: 1rem; border: 1px solid #334155; }
+        .control-panel { background: #1e293b; padding: 1.25rem; border-radius: 1rem; border: 1px solid #334155; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #3b82f6; }
+        label { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.15rem; display: block; }
+        .value-display { color: #3b82f6; font-weight: bold; }
+        select { background-color: #0f172a; border: 1px solid #475569; padding: 0.4rem; border-radius: 0.4rem; font-size: 0.8rem; color: white; width: 100%; }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-white">聲波三要素與波動演示</h1>
+                <p class="text-slate-400 mt-1 text-sm">觀察空氣分子的「疏密」如何對應到橫波的「高低」，並聆聽真實聲音</p>
+            </div>
+            <button id="audioToggle" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2">
+                <span>🔈 開啟聲音體驗</span>
+            </button>
+        </header>
+
+        <!-- 畫布區域 -->
+        <div class="relative mb-4">
+            <canvas id="waveCanvas"></canvas>
+            
+            <div class="absolute top-4 left-4 flex flex-col gap-2 bg-black/60 p-3 rounded-lg backdrop-blur-md border border-white/10 text-[10px]">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-white rounded-full"></div> 
+                    <span>空氣分子 (縱波：展現疏密變化)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-0.5 bg-blue-400"></div> 
+                    <span>位移曲線 (橫波：展現位移大小)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 操控區域：橫向佈局 -->
+        <div class="control-panel grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <!-- 音調控制 -->
+            <div>
+                <label>音調 (頻率): <span id="freqVal" class="value-display">262</span> Hz</label>
+                <input type="range" id="freqRange" min="130" max="523" value="262" step="1">
+            </div>
+
+            <!-- 響度控制 -->
+            <div>
+                <label>響度 (振幅): <span id="ampVal" class="value-display">50</span></label>
+                <input type="range" id="ampRange" min="0" max="100" value="50" step="1">
+            </div>
+
+            <!-- 音色控制 -->
+            <div>
+                <label>音色 (樂器波形)</label>
+                <select id="timbreType">
+                    <option value="sine">單純音 (正弦波)</option>
+                    <option value="piano">模擬鋼琴 (豐富泛音)</option>
+                    <option value="violin">模擬小提琴 (尖銳鋸齒)</option>
+                    <option value="flute">模擬長笛 (柔和純淨)</option>
+                </select>
+            </div>
+
+            <!-- 速度控制 -->
+            <div>
+                <label>波動速度: <span id="speedVal" class="value-display">慢速</span></label>
+                <input type="range" id="speedRange" min="0.005" max="0.1" value="0.015" step="0.005">
+            </div>
+
+            <!-- 播放與顯示控制 -->
+            <div class="flex flex-col gap-2">
+                <div class="flex gap-1">
+                    <button id="toggleParticles" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded text-[10px] border border-blue-500 font-bold">分子顯示</button>
+                    <button id="toggleWave" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded text-[10px] border border-blue-500 font-bold">曲線顯示</button>
+                </div>
+                <button id="pauseBtn" class="w-full py-1.5 bg-amber-600 hover:bg-amber-500 rounded font-bold text-xs transition">⏸ 暫停觀察</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('waveCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        function resize() {
+            width = canvas.clientWidth;
+            height = canvas.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 模擬狀態
+        let config = {
+            freq: 262,
+            amp: 50,
+            timbre: 'sine',
+            speed: 0.015, // 新增速度控制
+            showParticles: true,
+            showWave: true,
+            isPaused: false,
+            time: 0,
+            audioRunning: false
+        };
+
+        const harmonics = {
+            sine: [1],
+            piano: [1, 0.4, 0.2, 0.1, 0.05],
+            violin: [1, 0.8, 0.6, 0.4, 0.3, 0.2, 0.1],
+            flute: [1, 0.1, 0.05, 0.02]
+        };
+
+        const particles = [];
+        const rows = 14;
+        const cols = 70;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                particles.push({
+                    baseX: (c / cols),
+                    baseY: (r / rows) * 0.4 + 0.1
+                });
+            }
+        }
+
+        function getCombinedWave(xPercent, t, type) {
+            const hList = harmonics[type];
+            let total = 0;
+            const visualFreqScale = config.freq / 100;
+            const k = visualFreqScale * Math.PI * 2;
+            const phase = t * 3;
+            const angle = xPercent * k - phase;
+
+            for (let i = 0; i < hList.length; i++) {
+                const n = i + 1;
+                total += hList[i] * Math.sin(angle * n);
+            }
+            const sumWeights = hList.reduce((a, b) => a + b, 0);
+            return total / sumWeights;
+        }
+
+        let audioCtx, masterGain, oscs = [];
+
+        function startAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                masterGain.connect(audioCtx.destination);
+            }
+            updateAudio();
+        }
+
+        function updateAudio() {
+            if (!config.audioRunning || !audioCtx) return;
+            oscs.forEach(o => o.stop());
+            oscs = [];
+            const hList = harmonics[config.timbre];
+            const sumWeights = hList.reduce((a, b) => a + b, 0);
+            hList.forEach((weight, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(config.freq * (i + 1), audioCtx.currentTime);
+                const volume = (config.amp / 100) * (weight / sumWeights) * 0.5;
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                oscs.push(osc);
+            });
+        }
+
+        function draw() {
+            if (!config.isPaused) {
+                config.time += config.speed; // 使用可調速的步進
+            }
+
+            ctx.clearRect(0, 0, width, height);
+            const centerY = height / 2;
+            const visualAmp = config.amp * 0.8;
+
+            if (config.showParticles) {
+                particles.forEach(p => {
+                    const displacement = getCombinedWave(p.baseX, config.time, config.timbre) * visualAmp;
+                    const x = p.baseX * width + displacement;
+                    const y = p.baseY * height;
+                    const colorIntensity = Math.floor(Math.abs(displacement) * 2);
+                    ctx.fillStyle = `rgb(${200-colorIntensity}, ${200+colorIntensity}, 255)`;
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+
+            if (config.showWave) {
+                const waveYBase = height * 0.75;
+                ctx.globalAlpha = 1;
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#60a5fa';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#3b82f6';
+                ctx.beginPath();
+                for (let x = 0; x <= width; x++) {
+                    const xPct = x / width;
+                    const y = waveYBase + getCombinedWave(xPct, config.time, config.timbre) * visualAmp;
+                    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.beginPath();
+                ctx.moveTo(0, waveYBase); ctx.lineTo(width, waveYBase);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 12px sans-serif';
+            if (config.showParticles) ctx.fillText("空氣分子疏密 (縱波真實振動)", 20, height * 0.05);
+            if (config.showWave) ctx.fillText("數學位移曲線 (橫波演示方式)", 20, height * 0.65);
+
+            requestAnimationFrame(draw);
+        }
+
+        document.getElementById('freqRange').addEventListener('input', (e) => {
+            config.freq = parseInt(e.target.value);
+            document.getElementById('freqVal').innerText = config.freq;
+            updateAudio();
+        });
+
+        document.getElementById('ampRange').addEventListener('input', (e) => {
+            config.amp = parseInt(e.target.value);
+            document.getElementById('ampVal').innerText = config.amp;
+            updateAudio();
+        });
+
+        document.getElementById('speedRange').addEventListener('input', (e) => {
+            config.speed = parseFloat(e.target.value);
+            const speedDisplay = document.getElementById('speedVal');
+            if (config.speed < 0.015) speedDisplay.innerText = "極慢";
+            else if (config.speed < 0.04) speedDisplay.innerText = "慢速";
+            else if (config.speed < 0.07) speedDisplay.innerText = "中速";
+            else speedDisplay.innerText = "快速";
+        });
+
+        document.getElementById('timbreType').addEventListener('change', (e) => {
+            config.timbre = e.target.value;
+            updateAudio();
+        });
+
+        document.getElementById('audioToggle').addEventListener('click', function() {
+            config.audioRunning = !config.audioRunning;
+            if (config.audioRunning) {
+                startAudio();
+                this.innerText = "🛑 關閉聲音體驗";
+                this.classList.replace('bg-emerald-600', 'bg-red-600');
+            } else {
+                oscs.forEach(o => o.stop());
+                this.innerText = "🔈 開啟聲音體驗";
+                this.classList.replace('bg-red-600', 'bg-emerald-600');
+            }
+        });
+
+        document.getElementById('toggleParticles').addEventListener('click', function() {
+            config.showParticles = !config.showParticles;
+            this.style.opacity = config.showParticles ? "1" : "0.5";
+        });
+
+        document.getElementById('toggleWave').addEventListener('click', function() {
+            config.showWave = !config.showWave;
+            this.style.opacity = config.showWave ? "1" : "0.5";
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            config.isPaused = !config.isPaused;
+            this.innerText = config.isPaused ? "▶ 繼續播放" : "⏸ 暫停觀察";
+            this.classList.toggle('bg-amber-600', !config.isPaused);
+            this.classList.toggle('bg-emerald-600', config.isPaused);
+        });
+
+        draw();
+    </script>
+</body>
+</html>

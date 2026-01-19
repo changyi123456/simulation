@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>物理虛擬實驗室：液體比熱測定</title>
+    <title>物理虛擬實驗室：液體比熱測定 - 數據追蹤版</title>
     
     <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -31,13 +31,61 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "SpecificHeat_Basic_React" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+                // console.log(`[Logged]: ${action}`, details);
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+
+        // ==========================================
+        // 2. React 應用程式
+        // ==========================================
+
         // 解構 React Hooks
         const { useState, useEffect, useRef, useMemo } = React;
         
         // 確保 Recharts 已正確載入
         const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts || {};
 
-        // --- 內建圖標元件 (取代 lucide-react 依賴) ---
+        // --- 內建圖標元件 ---
         const IconBase = ({ children, className }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
@@ -63,9 +111,14 @@
             const [recordedData, setRecordedData] = useState([]); // 紀錄的數據點
             const [showFit, setShowFit] = useState(false); // 顯示擬合線
 
-            // --- 物理常數 (改用卡路里制) ---
+            // 1. 初始化 Logger
+            useEffect(() => {
+                InteractionLogger.init();
+            }, []);
+
+            // --- 物理常數 ---
             const SPECIFIC_HEAT_WATER = 1.0; // cal/g°C
-            const INPUT_POWER = 24.0; // cal/s (約 100W) - 雖然UI顯示未知，但物理引擎仍需此數值運算
+            const INPUT_POWER = 24.0; // cal/s
             const AMBIENT_TEMP = 25.0; // 環境溫度
             const DT = 0.1; // 模擬時間步長 (秒)
 
@@ -112,13 +165,25 @@
                 return () => cancelAnimationFrame(requestRef.current);
             }, [isRunning, mass, hasLid]);
 
-            // --- 輔助功能 ---
+            // --- 輔助功能 & 互動追蹤 ---
+            
+            const handleStart = () => {
+                setIsRunning(true);
+                InteractionLogger.log('ToggleHeating', { status: 'On' });
+            };
+
+            const handleStop = () => {
+                setIsRunning(false);
+                InteractionLogger.log('ToggleHeating', { status: 'Off' });
+            };
+
             const handleReset = () => {
                 setIsRunning(false);
                 setTime(0);
                 setTemperature(25.0);
                 setRecordedData([]);
                 setShowFit(false);
+                InteractionLogger.log('ResetExperiment');
             };
 
             const handleRecord = () => {
@@ -130,6 +195,27 @@
                     temp: parseFloat(temperature.toFixed(2)) 
                 }
                 ]);
+                InteractionLogger.log('RecordData', { 
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)) 
+                });
+            };
+
+            const toggleLid = () => {
+                const newState = !hasLid;
+                setHasLid(newState);
+                InteractionLogger.log('ToggleLid', { hasLid: newState });
+            };
+
+            const toggleFit = () => {
+                const newState = !showFit;
+                setShowFit(newState);
+                InteractionLogger.log('ToggleFit', { visible: newState });
+            };
+
+            // 滑桿專用的 Log 函數 (在 onMouseUp / onTouchEnd 觸發)
+            const logMassChange = () => {
+                InteractionLogger.log('ChangeMass', { value: mass });
             };
 
             // --- 線性回歸計算 ---
@@ -162,8 +248,6 @@
             }, [recordedData]);
 
             // --- 視覺參數 ---
-            // 水量高度映射：100g -> 60px, 500g -> 180px
-            // 確保在燒杯(h=192px)內不溢出
             const waterHeight = Math.min(185, (mass / 500) * 150 + 30);
             const waterColor = `rgba(${Math.min(255, 100 + (temperature - 25) * 2)}, 149, 237, 0.6)`;
 
@@ -191,67 +275,44 @@
                     {/* 1. 視覺模擬場景 */}
                     <div className="relative h-96 bg-gray-100 rounded-xl border border-gray-300 mb-4 flex justify-center items-end pb-2 shadow-inner overflow-hidden">
                         
-                        {/* 提示氣泡已移除 */}
-
-                        {/* 裝置群組 (使用 Flex 垂直排列，確保底部對齊) */}
                         <div className="flex flex-col items-center mb-4">
                         
-                        {/* === 燒杯模組容器 (Beaker Assembly) === 
-                            這裡使用 relative 容器包裹燒杯、蓋子和溫度計，
-                            確保它們的相對位置鎖定，不會因為外部佈局改變而跑位。
-                            尺寸: w-32 (128px), h-48 (192px)
-                        */}
                         <div className="relative w-32 h-48 mb-1">
                             
-                            {/* 溫度計 Thermometer 
-                                - 位置：絕對定位於燒杯容器內
-                                - 深度：bottom: 20px 確保球部在燒杯底部上方 20px 處
-                                - 水位：最低水量時水位約 60px，保證浸泡
-                                - z-index: 30 (最上層)
-                            */}
+                            {/* 溫度計 */}
                             <div 
                             className="absolute left-1/2 -translate-x-1/2 z-30 flex flex-col items-center" 
                             style={{ 
                                 bottom: '20px', 
-                                height: '240px' // 足夠長度凸出燒杯
+                                height: '240px' 
                             }}
                             >
-                            {/* 桿身 */}
                             <div className="w-2 flex-1 bg-yellow-50 border border-gray-400 rounded-t-lg relative shadow-sm">
-                                {/* 紅色酒精柱 */}
                                 <div 
                                 className="absolute bottom-0 w-full bg-red-500 transition-all duration-100 ease-linear rounded-b-sm"
                                 style={{ height: `${Math.max(5, (temperature / 120) * 100)}%` }}
                                 ></div>
-                                {/* 刻度 */}
                                 {[10, 20, 30, 40, 50, 60, 70, 80].map((pos) => (
                                 <div key={pos} className="absolute right-0 w-1 h-[1px] bg-black/30" style={{ top: `${pos}%` }}></div>
                                 ))}
                             </div>
-                            {/* 球部 */}
                             <div className="w-4 h-4 rounded-full bg-red-600 -mt-1 border border-gray-400 shadow-sm relative z-30"></div>
                             
-                            {/* 數值標籤 */}
                             <div className="absolute -right-20 top-2 bg-black/80 text-white text-[10px] px-2 py-0.5 rounded font-mono">
                                 T = {temperature.toFixed(1)}°C
                             </div>
                             </div>
 
-                            {/* 蓋子 Lid
-                                - 位置：absolute -top-3 (位於燒杯容器頂端上方)
-                                - z-index: 20 (高於燒杯邊緣和水)
-                            */}
+                            {/* 蓋子 */}
                             {hasLid && (
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-[136px] h-4 bg-gray-500 rounded-sm z-20 shadow-md border border-gray-600 flex justify-center items-center">
                                 <div className="w-8 h-1 bg-gray-700 rounded-full opacity-50"></div>
                             </div>
                             )}
 
-                            {/* 燒杯本體 Beaker
-                                - z-index: 10
-                            */}
+                            {/* 燒杯本體 */}
                             <div className="w-full h-full border-x-2 border-b-2 border-gray-400 rounded-b-xl relative bg-white/30 backdrop-blur-[1px] overflow-hidden z-10">
-                            {/* 水 Water */}
+                            {/* 水 */}
                             <div 
                                 className="absolute bottom-0 w-full transition-all duration-500"
                                 style={{ 
@@ -268,13 +329,12 @@
                                 )}
                             </div>
 
-                            {/* 燒杯刻度 */}
                             <div className="absolute right-0 bottom-10 w-3 h-[1px] bg-gray-600"></div>
                             <div className="absolute right-0 bottom-24 w-4 h-[1px] bg-gray-600"></div>
                             <div className="absolute right-0 bottom-38 w-3 h-[1px] bg-gray-600"></div>
                             </div>
 
-                            {/* 蒸氣 (無蓋時顯示，移至 relative 容器內以便定位) */}
+                            {/* 蒸氣 */}
                             {!hasLid && temperature > 50 && isRunning && (
                             <div className="absolute -top-16 left-0 w-full flex justify-center opacity-40 pointer-events-none z-0">
                                 <div className="w-2 h-12 bg-gray-400 rounded-full blur-lg animate-pulse" style={{ animationDuration: '1s' }}></div>
@@ -282,23 +342,19 @@
                             </div>
                             )}
                         </div>
-                        {/* === 燒杯模組結束 === */}
 
                         {/* 鐵架台網子 */}
                         <div className="w-40 h-1 bg-gray-700 mx-auto rounded-full z-0 shadow-sm"></div>
 
-                        {/* 酒精燈 (增加 margin-top 拉開距離) */}
+                        {/* 酒精燈 */}
                         <div className="flex flex-col items-center mt-12 relative">
-                            {/* 火焰 */}
                             <div className={`transition-opacity duration-300 absolute -top-12 left-1/2 -translate-x-1/2 ${isRunning ? 'opacity-100' : 'opacity-0'}`}>
                             <div className="relative">
                                 <div className="w-5 h-12 bg-orange-500 rounded-full blur-[3px] animate-pulse absolute top-0 left-1/2 -translate-x-1/2"></div>
                                 <div className="w-3 h-8 bg-yellow-200 rounded-full blur-[1px] absolute top-2 left-1/2 -translate-x-1/2"></div>
                             </div>
                             </div>
-                            {/* 燈芯 */}
                             <div className="w-3 h-4 bg-yellow-900/90 rounded-sm -mt-2 relative z-10"></div>
-                            {/* 燈體 */}
                             <div className="w-20 h-14 bg-gray-200 border-2 border-gray-400 rounded-b-xl rounded-t-md shadow-sm relative overflow-hidden flex items-end justify-center z-10">
                                 <div className="w-full h-10 bg-blue-300/40"></div>
                             </div>
@@ -322,6 +378,8 @@
                                 value={mass}
                                 disabled={isRunning || recordedData.length > 0}
                                 onChange={(e) => setMass(Number(e.target.value))}
+                                onMouseUp={logMassChange} // 放開滑鼠時記錄
+                                onTouchEnd={logMassChange} // 手機端放開時記錄
                                 className="w-full cursor-pointer accent-blue-600"
                             />
                             <span className="text-sm font-mono bg-blue-50 text-blue-800 px-2 py-1 rounded font-bold">{mass} g</span>
@@ -331,7 +389,7 @@
                         <div className="flex items-center justify-between border-l pl-4">
                             <span className="text-sm font-medium text-gray-700">器材設定</span>
                             <button 
-                            onClick={() => setHasLid(!hasLid)}
+                            onClick={toggleLid}
                             disabled={isRunning || recordedData.length > 0}
                             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm ${
                                 hasLid 
@@ -348,14 +406,14 @@
                         <div className="flex gap-2 pt-2 border-t">
                         {!isRunning ? (
                             <button 
-                            onClick={() => setIsRunning(true)}
+                            onClick={handleStart}
                             className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all"
                             >
                             <Play className="w-5 h-5 fill-current" /> 點火加熱
                             </button>
                         ) : (
                             <button 
-                            onClick={() => setIsRunning(false)}
+                            onClick={handleStop}
                             className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all"
                             >
                             <Pause className="w-5 h-5 fill-current" /> 暫停實驗
@@ -405,7 +463,7 @@
                             溫度-時間 關係圖
                         </h2>
                         <button 
-                            onClick={() => setShowFit(!showFit)}
+                            onClick={toggleFit}
                             disabled={recordedData.length < 2}
                             className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
                             showFit 

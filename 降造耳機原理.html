@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANC 降噪耳機情境模擬器 - 國中教學版</title>
+    <title>ANC 降噪耳機情境模擬器 - 數據追蹤版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #f8fafc; font-family: sans-serif; }
@@ -101,6 +101,56 @@
     </div>
 
     <script>
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "ANC_Simulation" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+                // console.log(`[Logged]: ${action}`, details); 
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // 初始化 Logger
+        InteractionLogger.init();
+
+
+        // ==========================================
+        // 2. 模擬器核心邏輯
+        // ==========================================
         const canvas = document.getElementById('ancCanvas');
         const ctx = canvas.getContext('2d');
         let width, height;
@@ -270,25 +320,53 @@
             requestAnimationFrame(drawScene);
         }
 
-        document.getElementById('freqRange').addEventListener('input', (e) => {
+        // ==========================================
+        // 3. 事件綁定 & 數據埋點 (Logging)
+        // ==========================================
+
+        const freqEl = document.getElementById('freqRange');
+        freqEl.addEventListener('input', (e) => {
             state.freq = parseInt(e.target.value);
             updateAudioParams();
         });
+        // 埋點: 頻率改變
+        freqEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeFrequency', { value: parseInt(e.target.value) });
+        });
 
-        document.getElementById('phaseRange').addEventListener('input', (e) => {
+
+        const phaseEl = document.getElementById('phaseRange');
+        phaseEl.addEventListener('input', (e) => {
             state.phase = parseInt(e.target.value);
             updateAudioParams();
         });
+        // 埋點: 相位改變 (重要：包含效率，讓 AI 知道學生調得好不好)
+        phaseEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangePhase', { 
+                value: parseInt(e.target.value),
+                current_efficiency: state.efficiency.toFixed(1)
+            });
+        });
 
-        document.getElementById('volRange').addEventListener('input', (e) => {
+
+        const volEl = document.getElementById('volRange');
+        volEl.addEventListener('input', (e) => {
             state.volume = parseFloat(e.target.value);
             updateAudioParams();
         });
+        // 埋點: 音量改變
+        volEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeVolume', { value: parseFloat(e.target.value) });
+        });
+
 
         document.getElementById('autoANC').addEventListener('click', () => {
             state.phase = 180;
             document.getElementById('phaseRange').value = 180;
             updateAudioParams();
+            
+            // 埋點: 使用自動校正
+            InteractionLogger.log('AutoCalibrate', { target_phase: 180 });
         });
 
         document.getElementById('audioBtn').addEventListener('click', function() {
@@ -297,11 +375,17 @@
                 state.isAudioOn = true;
                 this.innerHTML = `<span>🛑 關閉噪音</span>`;
                 this.classList.replace('bg-emerald-600', 'bg-red-600');
+                
+                // 埋點: 開啟
+                InteractionLogger.log('ToggleSimulation', { status: 'On' });
             } else {
                 audioCtx.close();
                 state.isAudioOn = false;
                 this.innerHTML = `🔈 開啟模擬噪音`;
                 this.classList.replace('bg-red-600', 'bg-emerald-600');
+
+                // 埋點: 關閉
+                InteractionLogger.log('ToggleSimulation', { status: 'Off' });
             }
         });
 

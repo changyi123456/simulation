@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>波的疊加原理互動模擬器 - 簡潔實驗版</title>
+    <title>波的疊加原理互動模擬器 - 數據追蹤版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; overflow-x: hidden; }
@@ -34,7 +34,7 @@
             </div>
         </div>
 
-        <!-- 操控區域：變寬且高度縮小 -->
+        <!-- 操控區域 -->
         <div class="control-panel">
             <!-- 脈衝模式控制 (自動相撞) -->
             <div id="pulseControls" class="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
@@ -104,6 +104,59 @@
     </div>
 
     <script>
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                // Log initialization
+                this.log('Initialize', { timestamp: new Date().toISOString() });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                // 限制歷史紀錄長度，避免 localStorage 爆滿 (選用，目前設為 500 筆)
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+                // Console log for debugging
+                // console.log(`[Logged]: ${action}`, details); 
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // 初始化 Logger
+        InteractionLogger.init();
+
+
+        // ==========================================
+        // 2. 模擬器核心邏輯
+        // ==========================================
         const canvas = document.getElementById('superCanvas');
         const ctx = canvas.getContext('2d');
         let width, height;
@@ -144,6 +197,8 @@
                 if (pulseTime * 5 > width + 400) {
                     isPulsing = false;
                     pulseTime = 0;
+                    // Log simulation finished
+                    InteractionLogger.log('SimulationCompleted', { mode: 'pulse' });
                 }
             }
 
@@ -212,13 +267,18 @@
             requestAnimationFrame(draw);
         }
 
-        // --- 事件綁定 ---
+        // ==========================================
+        // 3. 事件綁定 & 數據埋點 (Logging)
+        // ==========================================
 
         document.getElementById('pauseBtn').addEventListener('click', function() {
             isPaused = !isPaused;
             this.innerText = isPaused ? "▶ 繼續" : "⏸ 暫停";
             this.classList.toggle('bg-amber-600', !isPaused);
             this.classList.toggle('bg-emerald-600', isPaused);
+            
+            // Log Event
+            InteractionLogger.log('TogglePause', { isPaused: isPaused });
         });
 
         document.getElementById('modePulse').addEventListener('click', function() {
@@ -228,6 +288,9 @@
             document.getElementById('pulseControls').classList.remove('hidden');
             document.getElementById('freeControls').classList.add('hidden');
             isPulsing = false;
+
+            // Log Event
+            InteractionLogger.log('SwitchMode', { mode: 'pulse' });
         });
 
         document.getElementById('modeFree').addEventListener('click', function() {
@@ -237,6 +300,9 @@
             document.getElementById('modePulse').classList.remove('btn-active');
             document.getElementById('pulseControls').classList.add('hidden');
             document.getElementById('freeControls').classList.remove('hidden');
+
+            // Log Event
+            InteractionLogger.log('SwitchMode', { mode: 'free' });
         });
 
         document.getElementById('pulsePlay').addEventListener('click', () => {
@@ -245,23 +311,37 @@
             pb.innerText = "⏸ 暫停";
             pb.classList.add('bg-amber-600');
             pb.classList.remove('bg-emerald-600');
+
+            // Log Event
+            InteractionLogger.log('RunPulseSimulation', { 
+                type: pulseType, 
+                speed: simulationSpeed 
+            });
         });
 
         document.getElementById('pulseConstructive').addEventListener('click', function() {
             pulseType = 'constructive';
             this.classList.add('btn-active');
             document.getElementById('pulseDestructive').classList.remove('btn-active');
+
+            // Log Event
+            InteractionLogger.log('SetCollisionType', { type: 'constructive' });
         });
 
         document.getElementById('pulseDestructive').addEventListener('click', function() {
             pulseType = 'destructive';
             this.classList.add('btn-active');
             document.getElementById('pulseConstructive').classList.remove('btn-active');
+
+            // Log Event
+            InteractionLogger.log('SetCollisionType', { type: 'destructive' });
         });
 
         const bindRange = (id, labelId, key) => {
             const el = document.getElementById(id);
             if (!el) return;
+            
+            // 'input' 事件：用於即時 UI 更新 (維持原本流暢度)
             el.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value);
                 freeParams[key] = val;
@@ -269,6 +349,14 @@
                     const label = document.getElementById(labelId);
                     if (label) label.innerText = val;
                 }
+            });
+
+            // 'change' 事件：用於 Log 紀錄 (避免拖曳時產生過多垃圾數據)
+            el.addEventListener('change', (e) => {
+                InteractionLogger.log('UpdateWaveParam', { 
+                    parameter: key, 
+                    value: parseFloat(e.target.value) 
+                });
             });
         };
 
@@ -279,8 +367,16 @@
         bindRange('widthBRange', 'widthBLabel', 'widthB');
         bindRange('posBRange', null, 'posB');
 
-        document.getElementById('speedRange').addEventListener('input', (e) => {
+        const speedEl = document.getElementById('speedRange');
+        
+        // 速度滑桿的即時更新
+        speedEl.addEventListener('input', (e) => {
             simulationSpeed = parseFloat(e.target.value);
+        });
+        
+        // 速度滑桿的 Log
+        speedEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeSpeed', { value: parseFloat(e.target.value) });
         });
 
         draw();

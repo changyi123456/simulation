@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>上蜃景謎團：消失的船隻</title>
+    <title>上蜃景謎團：消失的船隻 - 數據追蹤版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
@@ -208,7 +208,55 @@
     </footer>
 
     <script>
-        // DOM Elements
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "Mirage_Mystery" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // 初始化 Logger
+        InteractionLogger.init();
+
+
+        // ==========================================
+        // 2. 模擬器邏輯
+        // ==========================================
         const sideCanvas = document.getElementById('sideViewCanvas');
         const povCanvas = document.getElementById('povCanvas');
         const drawCanvas = document.getElementById('drawingCanvas');
@@ -233,7 +281,7 @@
 
         // Drawing State
         let isDrawing = false;
-        let strokes = []; // Array of stroke objects: [ {points: [{x,y}...], color: '#...'}, ... ]
+        let strokes = []; 
         let currentStrokePoints = [];
         let currentColor = '#ef4444'; // Default Red
 
@@ -254,15 +302,23 @@
         window.addEventListener('resize', resizeCanvases);
         resizeCanvases();
 
-        // Interaction Listeners
+        // Interaction Listeners & Logging
         sliderStrength.addEventListener('input', (e) => {
             state.strength = parseInt(e.target.value);
             valStrength.textContent = state.strength;
         });
 
+        sliderStrength.addEventListener('change', (e) => {
+             InteractionLogger.log('ChangeInversionStrength', { value: parseInt(e.target.value) });
+        });
+
         sliderDistance.addEventListener('input', (e) => {
             state.distance = parseInt(e.target.value);
             valDistance.textContent = state.distance + 'km';
+        });
+
+        sliderDistance.addEventListener('change', (e) => {
+             InteractionLogger.log('ChangeDistance', { value: parseInt(e.target.value) });
         });
 
         // --- Drawing Tool Logic ---
@@ -276,6 +332,10 @@
                 btnRed.className = "w-8 h-8 rounded-full bg-red-500 border-2 border-white hover:scale-110 transition";
                 btnGreen.className = "w-8 h-8 rounded-full bg-green-600 border-2 border-slate-600 ring-2 ring-offset-1 ring-slate-300 hover:scale-110 transition ml-2";
             }
+            
+            // Log Tool Selection
+            const colorName = color === '#ef4444' ? 'Red' : 'Green';
+            InteractionLogger.log('SelectTool', { tool: 'Pen', color: colorName });
         }
 
         function getPos(e) {
@@ -308,6 +368,12 @@
                 points: currentStrokePoints,
                 color: currentColor
             });
+
+            // Log Drawing Action (Track completed strokes)
+            InteractionLogger.log('DrawPath', { 
+                color: currentColor === '#ef4444' ? 'Red' : 'Green',
+                strokeLength: currentStrokePoints.length 
+            });
         }
 
         // Mouse events
@@ -324,6 +390,7 @@
         function clearDrawing() {
             strokes = [];
             currentStrokePoints = [];
+            InteractionLogger.log('SelectTool', { tool: 'Eraser/Clear' });
         }
 
         function downloadDrawing() {
@@ -332,6 +399,7 @@
             link.download = '我的上蜃景推理作業.png';
             link.href = drawCanvas.toDataURL();
             link.click();
+            InteractionLogger.log('DownloadWork', { timestamp: new Date().toISOString() });
         }
 
 
@@ -457,8 +525,6 @@
             drawEye(sideCtx, eyeX, eyeY);
             drawShip(sideCtx, shipX, shipY, 1.0);
             
-            // NOTE: Rays are removed here as requested for the puzzle.
-
 
             // --- 2. Subjective View Rendering (POV) ---
             const w2 = povCanvas.width;

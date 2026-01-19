@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>糖水連續折射模擬實驗</title>
+    <title>糖水連續折射模擬實驗 - 數據追蹤版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
@@ -154,7 +154,55 @@
     </main>
 
     <script>
-        // --- Setup ---
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "Refraction_Lab" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // 初始化 Logger
+        InteractionLogger.init();
+
+
+        // ==========================================
+        // 2. 實驗邏輯 Setup
+        // ==========================================
         const sideCanvas = document.getElementById('sideViewCanvas');
         const povCanvas = document.getElementById('povCanvas');
         const sideCtx = sideCanvas.getContext('2d');
@@ -185,7 +233,9 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- Interaction ---
+        // --- Interaction & Logging ---
+        
+        // 濃度滑桿 - 即時更新畫面
         gradientSlider.addEventListener('input', (e) => {
             state.gradient = parseInt(e.target.value);
             gradientVal.innerText = state.gradient + '%';
@@ -193,16 +243,22 @@
                  densityLabel.style.opacity = state.gradient > 20 ? 1 : 0;
             }
         });
+
+        // 濃度滑桿 - 釋放滑鼠時紀錄 (避免垃圾數據)
+        gradientSlider.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeConcentration', { value: parseInt(e.target.value) });
+        });
+
+        // 高度滑桿 - 即時更新畫面
         heightSlider.addEventListener('input', (e) => {
             state.objHeight = parseInt(e.target.value);
         });
 
-        // --- Physics Helpers ---
-        function getN(yNormalized) {
-            const nWater = 1.33;
-            const maxDelta = 0.15 * (state.gradient / 100); 
-            return nWater + maxDelta * yNormalized;
-        }
+        // 高度滑桿 - 釋放滑鼠時紀錄
+        heightSlider.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeObjectHeight', { value: parseInt(e.target.value) });
+        });
+
 
         // --- Drawing Helpers ---
 
@@ -327,9 +383,8 @@
             sideCtx.lineWidth = 2;
             sideCtx.stroke();
             
-            // REMOVED THE YELLOW DOT ON ARROW as requested
 
-            // --- Virtual Image Logic (GHOST IS BACK but NO DASHED LINES) ---
+            // --- Virtual Image Logic ---
             const virtualY = objRealY - bendFactor * 1.5; // Shift UP like before
             
             if (state.gradient > 5) {
@@ -388,7 +443,7 @@
                 stretchY = 1.0 + (state.gradient / 200);
             }
 
-            ctx = povCtx;
+            let ctx = povCtx;
             ctx.save();
             ctx.translate(povObjX, finalPovY);
             ctx.scale(2.0, 2.0 * stretchY); // Scale up for POV

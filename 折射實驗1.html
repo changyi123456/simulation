@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>糖水濃度與折射路徑實驗</title>
+    <title>糖水濃度與折射路徑實驗 - 數據追蹤版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
@@ -144,6 +144,55 @@
     </footer>
 
     <script>
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "Refraction_Concentration_Path" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // 初始化 Logger
+        InteractionLogger.init();
+
+
+        // ==========================================
+        // 2. 實驗模擬 Setup
+        // ==========================================
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
         const concSlider = document.getElementById('concSlider');
@@ -167,15 +216,34 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // Interaction
+        // --- Interaction & Logging ---
+
+        // 濃度 - UI 更新
         concSlider.addEventListener('input', (e) => {
             state.concentration = parseInt(e.target.value);
             concDisplay.textContent = state.concentration + '%';
             updateStatus();
         });
+
+        // 濃度 - Log (改變結束)
+        concSlider.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeConcentration', { value: parseInt(e.target.value) });
+        });
+
+        // 角度 - UI 更新
         angleSlider.addEventListener('input', (e) => {
             state.incidentAngle = parseInt(e.target.value);
             angleDisplay.textContent = state.incidentAngle + '°';
+        });
+
+        // 角度 - Log (改變結束)
+        angleSlider.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeIncidentAngle', { value: parseInt(e.target.value) });
+        });
+
+        // 量角器 - Log
+        showProtractorCb.addEventListener('change', (e) => {
+            InteractionLogger.log('ToggleTool', { tool: 'protractor', visible: e.target.checked });
         });
 
         function updateStatus() {
@@ -229,7 +297,6 @@
             if (concRatio > 0) {
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
                 const particleCount = Math.floor(concRatio * 50);
-                const seed = 123; // Fixed random seed visual
                 for(let i=0; i<particleCount; i++) {
                     // Simple pseudo-random positions based on loop
                     const px = (Math.sin(i * 123 + state.time) * w/2 + w/2) % w;
@@ -279,11 +346,6 @@
                 ctx.lineTo(x2, y2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.stroke();
-
-                // Draw numbers for refraction side (bottom)
-                // 0 is Normal (down), so 90 is left/right surface
-                // Let's label angles from normal
-                // Angle from normal = |deg - 90| ? No simple circle logic
             }
             ctx.restore();
         }
@@ -306,10 +368,7 @@
             const theta2Deg = theta2Rad * 180 / Math.PI;
 
             // 3. Draw Incident Ray (Air)
-            // Comes from top-left (quadrant 2) usually if angle > 0
-            // Angle from normal (Up Y-axis is -90 deg in canvas space?)
             // Normal is Vertical. 0 deg incident = straight down.
-            // Let's define incident angle from Vertical.
             // Start point:
             const startX = cx - Math.sin(theta1Rad) * rayLen;
             const startY = cy - Math.cos(theta1Rad) * rayLen;
@@ -317,9 +376,7 @@
             // Draw Laser Body
             ctx.save();
             ctx.translate(startX, startY);
-            ctx.rotate(theta1Rad); // Rotate to point towards center?
-            // Actually direction vector is (sin, cos).
-            // At start point, direction is towards (cx, cy).
+            // Angle towards center
             const dirAngle = Math.atan2(cy - startY, cx - startX);
             ctx.rotate(dirAngle);
             
@@ -366,8 +423,6 @@
             if (state.incidentAngle > 5) {
                 ctx.beginPath();
                 // Arc from Normal (Up: -PI/2) to Incident Ray
-                // Ray comes from top-left. Vector is (startX-cx, startY-cy).
-                // Angle of vector from center is:
                 const incAngleFromCenter = Math.atan2(startY - cy, startX - cx); 
                 // Normal is -PI/2.
                 ctx.arc(cx, cy, arcRadius, -Math.PI/2, incAngleFromCenter, true);
@@ -378,13 +433,6 @@
                 // Text
                 ctx.fillStyle = '#fbbf24';
                 ctx.font = 'bold 14px Arial';
-                // Position text in middle of angle
-                const midAng = (-Math.PI/2 + incAngleFromCenter) / 2;
-                // Since we drew counter-clockwise/true, need to be careful with mid calc
-                // Actually incident comes from left, so angle is like -135 deg. Normal is -90.
-                // Text pos
-                const tx = cx + Math.cos(midAng - Math.PI) * (arcRadius + 20); // Flip side? No
-                // Simple placement:
                 ctx.fillText(`${state.incidentAngle}°`, cx - 30, cy - 80);
             }
 

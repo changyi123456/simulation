@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>聲波特性：縱波、橫波與真實音效</title>
+    <title>聲波特性：縱波、橫波與真實音效 - 數據追蹤版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; overflow-x: hidden; }
@@ -86,6 +86,55 @@
     </div>
 
     <script>
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "SoundWave_Properties" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // 初始化 Logger
+        InteractionLogger.init();
+
+
+        // ==========================================
+        // 2. 模擬器核心邏輯
+        // ==========================================
         const canvas = document.getElementById('waveCanvas');
         const ctx = canvas.getContext('2d');
         let width, height;
@@ -104,7 +153,7 @@
             freq: 262,
             amp: 50,
             timbre: 'sine',
-            speed: 0.015, // 新增速度控制
+            speed: 0.015,
             showParticles: true,
             showWave: true,
             isPaused: false,
@@ -180,7 +229,7 @@
 
         function draw() {
             if (!config.isPaused) {
-                config.time += config.speed; // 使用可調速的步進
+                config.time += config.speed; 
             }
 
             ctx.clearRect(0, 0, width, height);
@@ -232,19 +281,39 @@
             requestAnimationFrame(draw);
         }
 
-        document.getElementById('freqRange').addEventListener('input', (e) => {
+        // ==========================================
+        // 3. 事件綁定 & 數據埋點 (Logging)
+        // ==========================================
+
+        const freqEl = document.getElementById('freqRange');
+        // UI即時更新
+        freqEl.addEventListener('input', (e) => {
             config.freq = parseInt(e.target.value);
             document.getElementById('freqVal').innerText = config.freq;
             updateAudio();
         });
+        // 埋點: 頻率
+        freqEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeFrequency', { value: parseInt(e.target.value) });
+        });
 
-        document.getElementById('ampRange').addEventListener('input', (e) => {
+
+        const ampEl = document.getElementById('ampRange');
+        // UI即時更新
+        ampEl.addEventListener('input', (e) => {
             config.amp = parseInt(e.target.value);
             document.getElementById('ampVal').innerText = config.amp;
             updateAudio();
         });
+        // 埋點: 響度
+        ampEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeAmplitude', { value: parseInt(e.target.value) });
+        });
 
-        document.getElementById('speedRange').addEventListener('input', (e) => {
+
+        const speedEl = document.getElementById('speedRange');
+        // UI即時更新
+        speedEl.addEventListener('input', (e) => {
             config.speed = parseFloat(e.target.value);
             const speedDisplay = document.getElementById('speedVal');
             if (config.speed < 0.015) speedDisplay.innerText = "極慢";
@@ -252,11 +321,19 @@
             else if (config.speed < 0.07) speedDisplay.innerText = "中速";
             else speedDisplay.innerText = "快速";
         });
+        // 埋點: 速度
+        speedEl.addEventListener('change', (e) => {
+            InteractionLogger.log('ChangeSpeed', { value: parseFloat(e.target.value) });
+        });
+
 
         document.getElementById('timbreType').addEventListener('change', (e) => {
             config.timbre = e.target.value;
             updateAudio();
+            // 埋點: 音色
+            InteractionLogger.log('ChangeTimbre', { type: e.target.value });
         });
+
 
         document.getElementById('audioToggle').addEventListener('click', function() {
             config.audioRunning = !config.audioRunning;
@@ -264,21 +341,29 @@
                 startAudio();
                 this.innerText = "🛑 關閉聲音體驗";
                 this.classList.replace('bg-emerald-600', 'bg-red-600');
+                // 埋點: 開啟聲音
+                InteractionLogger.log('ToggleAudio', { status: 'On' });
             } else {
                 oscs.forEach(o => o.stop());
                 this.innerText = "🔈 開啟聲音體驗";
                 this.classList.replace('bg-red-600', 'bg-emerald-600');
+                // 埋點: 關閉聲音
+                InteractionLogger.log('ToggleAudio', { status: 'Off' });
             }
         });
 
         document.getElementById('toggleParticles').addEventListener('click', function() {
             config.showParticles = !config.showParticles;
             this.style.opacity = config.showParticles ? "1" : "0.5";
+            // 埋點
+            InteractionLogger.log('ToggleVisual', { type: 'particles', visible: config.showParticles });
         });
 
         document.getElementById('toggleWave').addEventListener('click', function() {
             config.showWave = !config.showWave;
             this.style.opacity = config.showWave ? "1" : "0.5";
+            // 埋點
+            InteractionLogger.log('ToggleVisual', { type: 'wave', visible: config.showWave });
         });
 
         document.getElementById('pauseBtn').addEventListener('click', function() {
@@ -286,6 +371,8 @@
             this.innerText = config.isPaused ? "▶ 繼續播放" : "⏸ 暫停觀察";
             this.classList.toggle('bg-amber-600', !config.isPaused);
             this.classList.toggle('bg-emerald-600', config.isPaused);
+            // 埋點
+            InteractionLogger.log('TogglePause', { isPaused: config.isPaused });
         });
 
         draw();

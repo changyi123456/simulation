@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>進階比熱實驗：甘油測量</title>
+    <title>進階比熱實驗：甘油測量 - 數據追蹤版</title>
     
     <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -31,6 +31,55 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "SpecificHeat_Advanced_React" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                // 限制長度
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+                // console.log(`[Logged]: ${action}`, details); 
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+
+        // ==========================================
+        // 2. React 應用程式
+        // ==========================================
+        
         // 解構 React Hooks
         const { useState, useEffect, useRef, useMemo } = React;
         
@@ -64,6 +113,11 @@
             const [liquidType, setLiquidType] = useState('water'); // 'water' 或 'glycerin'
             const [recordedData, setRecordedData] = useState([]); // 紀錄的數據點
             const [showFit, setShowFit] = useState(false); // 顯示擬合線
+
+            // 1. 初始化 Logger (使用 useEffect 模擬 componentDidMount)
+            useEffect(() => {
+                InteractionLogger.init();
+            }, []);
 
             // --- 物理常數 ---
             const SPECIFIC_HEAT_WATER = 1.0; // cal/g°C
@@ -131,19 +185,32 @@
                 return () => cancelAnimationFrame(requestRef.current);
             }, [isRunning, mass, hasLid, liquidType]);
 
-            // --- 輔助功能 ---
+            // --- 輔助功能 & 互動追蹤 ---
+            
+            const handleStart = () => {
+                setIsRunning(true);
+                InteractionLogger.log('ToggleHeating', { status: 'On' });
+            };
+
+            const handleStop = () => {
+                setIsRunning(false);
+                InteractionLogger.log('ToggleHeating', { status: 'Off' });
+            };
+
             const handleReset = () => {
                 setIsRunning(false);
                 setTime(0);
                 setTemperature(25.0);
                 setRecordedData([]);
                 setShowFit(false);
+                InteractionLogger.log('ResetExperiment');
             };
 
             // 切換液體時重置
             const handleLiquidChange = (type) => {
                 setLiquidType(type);
                 handleReset();
+                InteractionLogger.log('ChangeLiquid', { type: type });
             };
 
             const handleRecord = () => {
@@ -155,6 +222,28 @@
                     temp: parseFloat(temperature.toFixed(2)) 
                 }
                 ]);
+                InteractionLogger.log('RecordData', { 
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)),
+                    liquid: liquidType
+                });
+            };
+
+            const toggleLid = () => {
+                const newState = !hasLid;
+                setHasLid(newState);
+                InteractionLogger.log('ToggleLid', { hasLid: newState });
+            };
+
+            const toggleFit = () => {
+                const newState = !showFit;
+                setShowFit(newState);
+                InteractionLogger.log('ToggleFit', { visible: newState });
+            };
+
+            // 滑桿專用的 Log 函數 (在 onMouseUp / onTouchEnd 觸發，避免數據過多)
+            const logMassChange = () => {
+                InteractionLogger.log('ChangeMass', { value: mass });
             };
 
             // --- 線性回歸計算 ---
@@ -359,6 +448,8 @@
                                         value={mass}
                                         disabled={isRunning || recordedData.length > 0}
                                         onChange={(e) => setMass(Number(e.target.value))}
+                                        onMouseUp={logMassChange} // 放開滑鼠才記錄
+                                        onTouchEnd={logMassChange} // 手機端放開才記錄
                                         className="w-full cursor-pointer accent-emerald-600"
                                     />
                                     <span className="text-sm font-mono bg-emerald-50 text-emerald-800 px-2 py-1 rounded font-bold">{mass} g</span>
@@ -367,7 +458,7 @@
                                 
                                 <div className="flex items-center justify-end">
                                     <button 
-                                    onClick={() => setHasLid(!hasLid)}
+                                    onClick={toggleLid}
                                     disabled={isRunning || recordedData.length > 0}
                                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm w-full ${
                                         hasLid 
@@ -385,14 +476,14 @@
                         <div className="flex gap-2 pt-2 border-t">
                         {!isRunning ? (
                             <button 
-                            onClick={() => setIsRunning(true)}
+                            onClick={handleStart}
                             className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all"
                             >
                             <Play className="w-5 h-5 fill-current" /> 點火加熱
                             </button>
                         ) : (
                             <button 
-                            onClick={() => setIsRunning(false)}
+                            onClick={handleStop}
                             className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all"
                             >
                             <Pause className="w-5 h-5 fill-current" /> 暫停實驗
@@ -442,7 +533,7 @@
                             {liquidType === 'water' ? '水' : '甘油'}：溫度-時間 關係圖
                         </h2>
                         <button 
-                            onClick={() => setShowFit(!showFit)}
+                            onClick={toggleFit}
                             disabled={recordedData.length < 2}
                             className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
                             showFit 
@@ -511,8 +602,6 @@
                                 <span>斜率 (Slope):</span>
                                 <span className="font-mono font-bold">{linearFit.slope.toFixed(4)}</span>
                             </p>
-                            
-                            {/* 實驗思考指引已移除，保留純淨數據供學生思考 */}
                             </div>
                         </div>
                         )}

@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flipo Flip 物理數據分析 (SI制 - 橄欖球體)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --accent-color: #00E676;
+            --accent-hover: #00C853;
+            --border-color: #404040;
+            --graph-bg: #222;
+            --graph-line-v: #29B6F6;
+            --graph-line-w: #FFCA28;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左側控制面板 */
+        #controls {
+            width: 340px;
+            min-width: 340px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+            color: var(--accent-color);
+            text-align: center;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.95rem;
+            color: #bbb;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: #ccc;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 8px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+        }
+
+        .value-display {
+            color: var(--accent-color);
+            font-weight: bold;
+            font-family: monospace;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: #1a1a1a;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        /* 右側主區域 (包含模擬與圖表) */
+        #main-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* 模擬畫布 */
+        #canvas-wrapper {
+            flex-grow: 1;
+            position: relative;
+            background-color: #000;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 數據面板 */
+        #stats-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            font-family: 'Consolas', monospace;
+            color: #fff;
+            border: 1px solid #444;
+            min-width: 200px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+
+        .stat-value {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* 圖表區域 */
+        #graphs-container {
+            height: 250px;
+            min-height: 250px;
+            background-color: var(--panel-bg);
+            display: flex;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .graph-box {
+            flex: 1;
+            background-color: var(--graph-bg);
+            border-radius: 4px;
+            border: 1px solid #444;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .graph-title {
+            padding: 5px 10px;
+            font-size: 0.85rem;
+            color: #aaa;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        canvas.graph-canvas {
+            flex-grow: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        #watermark {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 1.5rem;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 100;
+            font-family: sans-serif;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 左側控制面板 -->
+    <div id="controls">
+        <h1>物理數據分析 (SI制)</h1>
+        
+        <div class="control-group">
+            <h3>斜面參數 (Incline)</h3>
+            <label>斜面角度: <span id="val-slopeAngle" class="value-display">20</span>°</label>
+            <input type="range" id="slopeAngle" min="5" max="60" step="1" value="20" oninput="resetSimulation()">
+        </div>
+
+        <div class="control-group">
+            <h3>物體參數 (Ellipsoid Object)</h3>
+            
+            <label>短軸半徑 (Radius): <span id="val-radius" class="value-display">0.02</span> m</label>
+            <input type="range" id="radius" min="0.01" max="0.05" step="0.001" value="0.02" oninput="resetSimulation()">
+
+            <label>長寬比 (Aspect Ratio): <span id="val-aspectRatio" class="value-display">1.8</span></label>
+            <input type="range" id="aspectRatio" min="1.0" max="3.0" step="0.1" value="1.8" oninput="resetSimulation()">
+
+            <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                *形狀：橢圓體 (橄欖球狀)
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>初始條件 (Initial)</h3>
+            <label>微調角度: <span id="val-releaseAngle" class="value-display">0</span>°</label>
+            <input type="range" id="releaseAngle" min="-90" max="90" step="1" value="0" oninput="resetSimulation()">
+        </div>
+
+        <div class="control-group">
+            <h3>物理性質 (Physics)</h3>
+            <label>摩擦力 (Surface): <span id="val-friction" class="value-display">0.6</span></label>
+            <input type="range" id="friction" min="0.0" max="1.0" step="0.05" value="0.6" oninput="resetSimulation()">
+            
+            <label>彈性係數 (Restitution): <span id="val-restitution" class="value-display">0.5</span></label>
+            <input type="range" id="restitution" min="0" max="1.0" step="0.1" value="0.5" oninput="resetSimulation()">
+
+            <!-- 新增：滾動阻力 -->
+            <label>滾動阻力 (Rolling): <span id="val-rollingFriction" class="value-display">0.01</span></label>
+            <input type="range" id="rollingFriction" min="0.0" max="0.2" step="0.001" value="0.01" oninput="resetSimulation()">
+        </div>
+
+        <button onclick="resetSimulation()">重置 / 開始實驗 (Reset)</button>
+        <button id="pauseBtn" onclick="togglePause()" style="background-color: #546E7A; margin-top: 5px;">暫停 (Pause)</button>
+        <button onclick="exportData()" style="background-color: #FF9800; margin-top: 5px;">匯出 Excel (Export CSV)</button>
+        
+        <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="slowMo" style="width: auto; margin: 0;">
+            <label for="slowMo" style="margin:0; cursor: pointer;">慢動作 (Slow Motion)</label>
+        </div>
+        <div style="margin-top: 5px; display: flex; align-items: center; gap: 10px;">
+             <input type="checkbox" id="showTrail" checked style="width: auto; margin: 0;">
+             <label for="showTrail" style="margin:0; cursor: pointer;">顯示軌跡 (Show Trail)</label>
+        </div>
+    </div>
+
+    <!-- 右側主區域 -->
+    <div id="main-area">
+        <!-- 模擬區 -->
+        <div id="canvas-wrapper">
+            <div id="canvas-container"></div>
+            <div id="stats-panel">
+                <div class="stat-row">時間 (t): <span id="stat-time" class="stat-value">0.00</span> s</div>
+                <div class="stat-row">線速度 (v): <span id="stat-vel" class="stat-value">0.00</span> m/s</div>
+                <div class="stat-row">角速度 (ω): <span id="stat-omega" class="stat-value">0.0</span> rad/s</div>
+                <div class="stat-row">位移 (d): <span id="stat-dist" class="stat-value">0.00</span> m</div>
+                <div class="stat-row">動能 (Ek): <span id="stat-ke" class="stat-value">0.00</span> J</div>
+            </div>
+            <div id="watermark">IG : aiphysicsteacher</div>
+        </div>
+
+        <!-- 圖表區 -->
+        <div id="graphs-container">
+            <div class="graph-box">
+                <div class="graph-title">
+                    <span>v-t 圖 (線速度)</span>
+                    <span style="color: var(--graph-line-v)">■ m/s</span>
+                </div>
+                <canvas id="canvas-v-t" class="graph-canvas"></canvas>
+            </div>
+            <div class="graph-box">
+                <div class="graph-title">
+                    <span>ω-t 圖 (角速度)</span>
+                    <span style="color: var(--graph-line-w)">■ rad/s</span>
+                </div>
+                <canvas id="canvas-omega-t" class="graph-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 設定常數 ---
+        const PX_PER_METER = 3000; 
+        const MAX_GRAPH_POINTS = 300; 
+
+        // --- Matter.js 模組 ---
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              Runner = Matter.Runner,
+              Bodies = Matter.Bodies,
+              Body = Matter.Body,
+              Composite = Matter.Composite,
+              Events = Matter.Events,
+              Vector = Matter.Vector;
+
+        let engine, render, runner;
+        let flipoBody = null;
+        let slopeBody = null;
+        let trail = [];
+        let startPos = { x: 0, y: 0 };
+        let simulationTime = 0;
+        let isPaused = false;
+        
+        // --- 數據記錄 ---
+        let dataLog = [];
+
+        // --- 圖表管理器 ---
+        class RealtimeGraph {
+            constructor(canvasId, color, yLabel, autoScale = true) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.color = color;
+                this.data = [];
+                this.autoScale = autoScale;
+                this.minY = 0;
+                this.maxY = 2;
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.canvas.width = rect.width * window.devicePixelRatio;
+                this.canvas.height = (rect.height - 30) * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                this.width = rect.width;
+                this.height = rect.height - 30;
+            }
+
+            reset() {
+                this.data = [];
+                this.minY = 0;
+                this.maxY = 1;
+                this.draw();
+            }
+
+            push(t, val) {
+                this.data.push({t, val});
+                if (this.data.length > MAX_GRAPH_POINTS) {
+                    this.data.shift();
+                }
+                this.draw();
+            }
+
+            draw() {
+                const ctx = this.ctx;
+                const w = this.width;
+                const h = this.height;
+
+                ctx.clearRect(0, 0, w, h);
+
+                if (this.data.length < 2) return;
+
+                let minVal = Infinity;
+                let maxVal = -Infinity;
+                
+                if (this.autoScale) {
+                    for (let p of this.data) {
+                        if (p.val < minVal) minVal = p.val;
+                        if (p.val > maxVal) maxVal = p.val;
+                    }
+                    let range = maxVal - minVal;
+                    if (range === 0) range = 0.1;
+                    this.minY = minVal - range * 0.1;
+                    this.maxY = maxVal + range * 0.1;
+                    if (this.minY > 0) this.minY = 0;
+                }
+
+                const yRange = this.maxY - this.minY;
+                const xRange = this.data[this.data.length - 1].t - this.data[0].t;
+
+                // 網格
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                if (this.minY < 0 && this.maxY > 0) {
+                    const y0 = h - ((0 - this.minY) / yRange) * h;
+                    ctx.moveTo(0, y0);
+                    ctx.lineTo(w, y0);
+                }
+                ctx.stroke();
+
+                // 數據線
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                const startTime = this.data[0].t;
+                for (let i = 0; i < this.data.length; i++) {
+                    const p = this.data[i];
+                    const x = xRange > 0 ? ((p.t - startTime) / xRange) * w : w;
+                    const y = h - ((p.val - this.minY) / yRange) * h;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                // 數值
+                ctx.fillStyle = this.color;
+                ctx.font = '12px monospace';
+                ctx.fillText(this.data[this.data.length-1].val.toFixed(2), w - 50, 15);
+            }
+        }
+
+        let graphV, graphOmega;
+
+        function init() {
+            engine = Engine.create();
+            engine.positionIterations = 8;
+            engine.velocityIterations = 8;
+
+            const container = document.getElementById('canvas-container');
+            const wrapper = document.getElementById('canvas-wrapper');
+            
+            render = Render.create({
+                element: container,
+                engine: engine,
+                options: {
+                    width: wrapper.clientWidth,
+                    height: wrapper.clientHeight,
+                    background: '#111',
+                    wireframes: false,
+                    showAngleIndicator: false,
+                    pixelRatio: window.devicePixelRatio
+                }
+            });
+
+            runner = Runner.create();
+            Events.on(render, 'afterRender', updateVisuals);
+            Render.run(render);
+            Runner.run(runner, engine);
+
+            document.addEventListener('contextmenu', event => event.preventDefault());
+
+            graphV = new RealtimeGraph('canvas-v-t', '#29B6F6', 'v');
+            graphOmega = new RealtimeGraph('canvas-omega-t', '#FFCA28', 'ω');
+
+            window.addEventListener('resize', () => {
+                render.canvas.width = wrapper.clientWidth;
+                render.canvas.height = wrapper.clientHeight;
+            });
+
+            resetSimulation();
+        }
+
+        function resetSimulation() {
+            Composite.clear(engine.world);
+            Engine.clear(engine);
+            trail = [];
+            simulationTime = 0;
+            
+            // 重置數據記錄
+            dataLog = [];
+
+            isPaused = false;
+            if (runner) runner.enabled = true;
+            updatePauseButton();
+
+            if(graphV) graphV.reset();
+            if(graphOmega) graphOmega.reset();
+
+            // 參數獲取
+            const slopeAngleDeg = parseFloat(document.getElementById('slopeAngle').value);
+            const aspectRatio = parseFloat(document.getElementById('aspectRatio').value);
+            const radiusM = parseFloat(document.getElementById('radius').value);
+            const friction = parseFloat(document.getElementById('friction').value);
+            const restitution = parseFloat(document.getElementById('restitution').value);
+            const releaseAngleDeg = parseFloat(document.getElementById('releaseAngle').value);
+            
+            // 新增：滾動阻力 (讀取拉桿數值)
+            const rollingFriction = parseFloat(document.getElementById('rollingFriction').value);
+
+            const slopeRad = slopeAngleDeg * (Math.PI / 180);
+            const releaseRad = releaseAngleDeg * (Math.PI / 180);
+
+            // 創建斜面
+            const slopeLengthPx = 20 * PX_PER_METER;
+            const startX = 100; 
+            const startY = 300;
+            const slopeCenterX = startX + (slopeLengthPx / 2) * Math.cos(slopeRad);
+            const slopeCenterY = startY + (slopeLengthPx / 2) * Math.sin(slopeRad);
+
+            slopeBody = Bodies.rectangle(slopeCenterX, slopeCenterY, slopeLengthPx, 40, {
+                isStatic: true,
+                angle: slopeRad,
+                friction: friction,
+                render: { fillStyle: '#444' }
+            });
+
+            // 創建橢圓體
+            const radiusPx = radiusM * PX_PER_METER;
+            const objMajorAxisPx = radiusPx * 2 * aspectRatio; 
+            const objMinorAxisPx = radiusPx * 2;
+            const maxDimension = Math.max(objMajorAxisPx, objMinorAxisPx);
+            const offsetDist = (maxDimension / 2) + 5; 
+            
+            const spawnDist = 0.5 * PX_PER_METER;
+            const spawnBaseX = startX + spawnDist * Math.cos(slopeRad);
+            const spawnBaseY = startY + spawnDist * Math.sin(slopeRad);
+
+            const normalX = Math.cos(slopeRad - Math.PI/2);
+            const normalY = Math.sin(slopeRad - Math.PI/2);
+
+            const flipoX = spawnBaseX + normalX * offsetDist;
+            const flipoY = spawnBaseY + normalY * offsetDist;
+            startPos = { x: flipoX, y: flipoY };
+
+            // === 關鍵修正：先縮放，再旋轉 ===
+            
+            // 1. 創建一個角度為 0 的圓
+            flipoBody = Bodies.circle(flipoX, flipoY, radiusPx, {
+                friction: friction,
+                restitution: restitution,
+                frictionAir: 0,           // 移除空氣阻力 (設為0)
+                frictionAngular: rollingFriction, // 加入滾動阻力 (角阻尼)
+                density: 0.01,
+                angle: 0, 
+                render: {
+                    fillStyle: '#00E676',
+                    strokeStyle: '#FFF',
+                    lineWidth: 2
+                }
+            });
+
+            // 2. 進行縮放 (沿著世界 X 軸拉伸)
+            Body.scale(flipoBody, aspectRatio, 1);
+            
+            // 3. 計算目標角度並旋轉 (斜面法線方向 + 微調)
+            const targetAngle = slopeRad + releaseRad - Math.PI / 2;
+            Body.setAngle(flipoBody, targetAngle);
+
+            Composite.add(engine.world, [slopeBody, flipoBody]);
+
+            Render.lookAt(render, {
+                min: { x: flipoX - 0.2 * PX_PER_METER, y: flipoY - 0.3 * PX_PER_METER },
+                max: { x: flipoX + 0.5 * PX_PER_METER, y: flipoY + 0.3 * PX_PER_METER }
+            });
+        }
+        
+        // 匯出數據功能
+        function exportData() {
+            if (dataLog.length === 0) {
+                alert("沒有數據可匯出，請先執行模擬！");
+                return;
+            }
+
+            // CSV Header (加入 BOM \uFEFF 確保 Excel 中文顯示正常)
+            let csvContent = "\uFEFF"; 
+            csvContent += "時間 Time (s),位置 Position X (m),位置 Position Y (m),線速度 Velocity (m/s),角速度 Angular Vel (rad/s),角度 Angle (rad),位移 Displacement (m),動能 Kinetic Energy (J)\n";
+
+            // CSV Rows
+            dataLog.forEach(row => {
+                csvContent += `${row.t},${row.x},${row.y},${row.v},${row.omega},${row.angle},${row.dist},${row.ke}\n`;
+            });
+
+            // 建立 Blob 物件
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            // 建立下載連結
+            const link = document.createElement("a");
+            link.href = url;
+            const filename = `physics_data_${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.csv`;
+            link.setAttribute("download", filename);
+            document.body.appendChild(link);
+            link.click();
+            
+            // 清理
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function togglePause() {
+            if (!runner) return;
+            isPaused = !isPaused;
+            runner.enabled = !isPaused;
+            updatePauseButton();
+        }
+
+        function updatePauseButton() {
+            const btn = document.getElementById('pauseBtn');
+            if (isPaused) {
+                btn.innerText = "繼續 (Resume)";
+                btn.style.backgroundColor = "#4CAF50";
+            } else {
+                btn.innerText = "暫停 (Pause)";
+                btn.style.backgroundColor = "#546E7A";
+            }
+        }
+
+        function updateVisuals() {
+            if (!flipoBody) return;
+
+            const ctx = render.context;
+
+            // 自訂繪製軸向
+            ctx.save();
+            ctx.translate(flipoBody.position.x, flipoBody.position.y);
+            ctx.rotate(flipoBody.angle);
+            
+            const radiusM = parseFloat(document.getElementById('radius').value);
+            const ratio = parseFloat(document.getElementById('aspectRatio').value);
+            const rPx = radiusM * PX_PER_METER;
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#004D40';
+            ctx.lineWidth = 3;
+            // 縮放後，原本的圓半徑在 X 軸方向變成了 r * ratio
+            ctx.moveTo(-rPx * ratio, 0);
+            ctx.lineTo(rPx * ratio, 0);
+            ctx.moveTo(0, -rPx);
+            ctx.lineTo(0, rPx);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.fillStyle = '#FFF';
+            ctx.arc(0, 0, 3, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.restore();
+
+            if (isPaused) return;
+
+            const dt = engine.timing.lastDelta / 1000;
+            const isSlowMo = document.getElementById('slowMo').checked;
+            runner.delta = isSlowMo ? 1000 / 60 / 5 : 1000 / 60;
+            simulationTime += dt * (isSlowMo ? 0.2 : 1.0);
+
+            const speedPxPerSec = flipoBody.speed * 60; 
+            const speedMPerSec = speedPxPerSec / PX_PER_METER;
+            const omegaRadPerSec = flipoBody.angularVelocity * 60;
+
+            const distPx = Vector.magnitude(Vector.sub(flipoBody.position, startPos));
+            const distM = distPx / PX_PER_METER;
+            const ke = 0.5 * speedMPerSec * speedMPerSec;
+
+            document.getElementById('stat-time').innerText = simulationTime.toFixed(2);
+            document.getElementById('stat-vel').innerText = speedMPerSec.toFixed(2);
+            document.getElementById('stat-omega').innerText = omegaRadPerSec.toFixed(1);
+            document.getElementById('stat-dist').innerText = distM.toFixed(2);
+            document.getElementById('stat-ke').innerText = ke.toFixed(3);
+
+            if (engine.timing.timestamp % 50 < 17) {
+                // 更新圖表
+                graphV.push(simulationTime, speedMPerSec);
+                graphOmega.push(simulationTime, omegaRadPerSec);
+
+                // 記錄數據以供匯出
+                dataLog.push({
+                    t: simulationTime.toFixed(4),
+                    x: (flipoBody.position.x / PX_PER_METER).toFixed(4),
+                    y: (flipoBody.position.y / PX_PER_METER).toFixed(4),
+                    v: speedMPerSec.toFixed(4),
+                    omega: omegaRadPerSec.toFixed(4),
+                    angle: flipoBody.angle.toFixed(4),
+                    dist: distM.toFixed(4),
+                    ke: ke.toFixed(4)
+                });
+            }
+
+            if (document.getElementById('showTrail').checked) {
+                if (engine.timing.timestamp % 10 < 2 && flipoBody.speed > 0.1) {
+                    trail.push({ ...flipoBody.position });
+                    if (trail.length > 300) trail.shift();
+                }
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0, 230, 118, 0.4)';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < trail.length - 1; i++) {
+                    ctx.moveTo(trail[i].x, trail[i].y);
+                    ctx.lineTo(trail[i+1].x, trail[i+1].y);
+                }
+                ctx.stroke();
+            }
+
+            // 相機跟隨
+            const canvasW = render.canvas.width;
+            const canvasH = render.canvas.height;
+            const targetX = flipoBody.position.x + canvasW * 0.2;
+            const targetY = flipoBody.position.y;
+            const currentCenter = {
+                x: (render.bounds.min.x + render.bounds.max.x) / 2,
+                y: (render.bounds.min.y + render.bounds.max.y) / 2
+            };
+            const lerpFactor = 0.1;
+            const newCenterX = currentCenter.x + (targetX - currentCenter.x) * lerpFactor;
+            const newCenterY = currentCenter.y + (targetY - currentCenter.y) * lerpFactor;
+
+            Render.lookAt(render, {
+                min: { x: newCenterX - canvasW / 2, y: newCenterY - canvasH / 2 },
+                max: { x: newCenterX + canvasW / 2, y: newCenterY + canvasH / 2 }
+            });
+        }
+
+        document.querySelectorAll('input[type="range"]').forEach(input => {
+            input.addEventListener('input', (e) => {
+                document.getElementById('val-' + e.target.id).innerText = e.target.value;
+            });
+        });
+
+        window.onload = init;
+    </script>
+</body>
+</html>

@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V型磁軌實驗模擬器 (V-Gate Physics)</title>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- dat.GUI -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; background-color: #1a1a1a; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            pointer-events: none;
+            font-size: 14px;
+            z-index: 10;
+            width: 250px;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 20;
+        }
+        /* 圖表容器 */
+        #charts-container {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            height: 220px;
+            display: flex;
+            gap: 10px;
+            pointer-events: none; 
+            z-index: 15;
+        }
+        .chart-box {
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            padding: 8px;
+            flex: 1;
+            pointer-events: auto; 
+            border: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+        }
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .speed-bar-container {
+            width: 100%;
+            height: 10px;
+            background: #333;
+            margin-top: 5px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .speed-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #4caf50, #ffeb3b, #f44336);
+            transition: width 0.1s;
+        }
+        #watermark {
+            position: absolute;
+            bottom: 240px; 
+            right: 20px;
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 20px;
+            font-weight: bold;
+            font-family: 'Arial', sans-serif;
+            pointer-events: none;
+            z-index: 10;
+            user-select: none;
+        }
+        .legend-text {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 資訊面板 -->
+<div id="info">
+    <h2 style="margin: 0 0 10px 0; font-size: 18px;">V型磁軌實驗 (V-Gate)</h2>
+    <p>狀態: <span id="status">準備就緒</span></p>
+    <p>時間: <span id="timeDisplay">0.00</span> s</p>
+    <p>速度: <span id="velocity">0.00</span> m/s</p>
+    <p>位移: <span id="distance">0.00</span> m</p>
+    <div class="speed-bar-container">
+        <div id="speedBar" class="speed-bar"></div>
+    </div>
+    <div style="margin-top:10px; font-size:12px; color:#888; border-top:1px solid #444; padding-top:5px;">
+        運算模式：向量場 + 幾何變形<br>
+        軌道形狀：收斂型 (Converging)<br>
+        磁極方向：垂直向上 (同極)
+    </div>
+</div>
+
+<!-- 浮水印 -->
+<div id="watermark">IG : aiphysicsteacher</div>
+
+<!-- 圖表區 -->
+<div id="charts-container">
+    <div class="chart-box">
+        <div class="legend-text">速度 vs 時間 (v-t)</div>
+        <canvas id="velocityChart"></canvas>
+    </div>
+    <div class="chart-box">
+        <div class="legend-text">磁位能地形圖 U(x) - 反應幾何效應</div>
+        <canvas id="potentialChart"></canvas>
+    </div>
+</div>
+
+<!-- 控制面板容器 -->
+<div id="controls"></div>
+
+<script>
+    // --- 全局變數 ---
+    let scene, camera, renderer;
+    let vehicle, trackMagnets = []; 
+    let floor;
+    let isSimulating = false;
+    let simulationTime = 0;
+    
+    // 數據記錄陣列
+    let simulationData = [];
+
+    // 圖表實例
+    let vChart, pChart;
+
+    // 物理參數狀態
+    const physicsState = {
+        position: new THREE.Vector3(0, 0.8, 0),
+        velocity: new THREE.Vector3(0, 0, 0),
+        acceleration: new THREE.Vector3(0, 0, 0),
+        angularVelocity: 0
+    };
+
+    // 實驗配置參數 (GUI)
+    const params = {
+        // 軌道設定
+        arrangement: 'Vertical_Up', // 預設改為照片中的垂直向上
+        magnetGroups: 8,      
+        magnetSpacing: 1.5,   
+        trackWidthStart: 3.5, // 起點寬度
+        trackTaper: 0.15,     // 收斂率 (每公尺縮減寬度)
+        wheelSpacing: 2.8,    // 輪子間距 (新增參數，預設約為 3.5 * 0.8)
+        
+        // 物理力學
+        initialVelocity: 2.0, 
+        rollingFriction: 0.02,
+        viscousDamping: 0.02,
+        magnetStrength: 120,   
+        vehicleMass: 1.0,     
+        
+        // 操作
+        reset: function() { resetSimulation(); },
+        startStop: function() { toggleSimulation(); },
+        exportData: function() { exportToCSV(); } // 新增匯出功能
+    };
+
+    // 物理常數
+    const CONSTANTS = {
+        gravity: 9.8,
+        dt: 0.016,
+    };
+
+    // 初始化
+    function init() {
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // 1. 場景
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        scene.fog = new THREE.Fog(0x222222, 10, 80);
+
+        // 2. 相機
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(-15, 12, 15);
+        camera.lookAt(0, 0, 5);
+
+        // 3. 渲染器
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // 4. 燈光
+        const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(-10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // 5. 地面
+        const floorGeometry = new THREE.PlaneGeometry(200, 200);
+        const floorMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x444444, roughness: 0.4, metalness: 0.6 
+        });
+        floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(200, 100, 0x000000, 0x444444);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // 建立物件
+        createTrack();
+        createVehicle();
+        
+        // 初始化圖表
+        initCharts();
+        calculatePotentialLandscape();
+
+        // GUI
+        setupGUI();
+
+        // 監聽
+        window.addEventListener('resize', onWindowResize, false);
+        setupMouseControls();
+
+        // 動畫循環
+        animate();
+    }
+
+    // --- 核心物理運算：磁偶極位能 ---
+    function calculateDipolePotential(m1, m2, rVec) {
+        const r = rVec.length();
+        if (r < 0.1) return 0; 
+
+        const rHat = rVec.clone().normalize();
+        
+        // U = (k/r^3) * [ m1.m2 - 3(m1.r)(m2.r) ]
+        const m1_dot_m2 = m1.dot(m2);
+        const m1_dot_rHat = m1.dot(rHat);
+        const m2_dot_rHat = m2.dot(rHat);
+
+        const factor = params.magnetStrength / Math.pow(r, 3);
+        const potential = factor * (m1_dot_m2 - 3 * m1_dot_rHat * m2_dot_rHat);
+
+        return potential;
+    }
+
+    function getTotalPotentialAt(z) {
+        let totalU = 0;
+        
+        const wheelY = 0.8;
+        // 使用使用者設定的輪子間距計算偏移量 (間距的一半)
+        const wheelOffsetX = params.wheelSpacing / 2;
+        
+        // 車輪磁矩
+        let leftWheelM, rightWheelM;
+
+        if (params.arrangement === 'Vertical_Up') {
+            leftWheelM = new THREE.Vector3(-1, 0, 0); 
+            rightWheelM = new THREE.Vector3(1, 0, 0);
+        } else {
+            leftWheelM = new THREE.Vector3(-1, 0, 0); 
+            rightWheelM = new THREE.Vector3(1, 0, 0);
+        }
+
+        const leftWheelPos = new THREE.Vector3(-wheelOffsetX, wheelY, z);
+        const rightWheelPos = new THREE.Vector3(wheelOffsetX, wheelY, z);
+
+        trackMagnets.forEach(mag => {
+            if (Math.abs(mag.mesh.position.z - z) > 10) return;
+
+            if (mag.side === 'left') {
+                const rVec = new THREE.Vector3().subVectors(mag.mesh.position, leftWheelPos);
+                totalU += calculateDipolePotential(leftWheelM, mag.moment, rVec);
+            }
+            else {
+                const rVec = new THREE.Vector3().subVectors(mag.mesh.position, rightWheelPos);
+                totalU += calculateDipolePotential(rightWheelM, mag.moment, rVec);
+            }
+        });
+
+        return totalU;
+    }
+
+    // --- 圖表系統 ---
+    function initCharts() {
+        const ctxV = document.getElementById('velocityChart').getContext('2d');
+        vChart = new Chart(ctxV, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: '速度', data: [], borderColor: '#4caf50', borderWidth: 2, pointRadius: 0, tension: 0.1 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { grid: { color: '#333' }, ticks: { color: '#aaa' } } }
+            }
+        });
+
+        const ctxP = document.getElementById('potentialChart').getContext('2d');
+        pChart = new Chart(ctxP, {
+            type: 'line',
+            data: { labels: [], datasets: [{ 
+                label: '磁位能 U(x)', 
+                data: [], 
+                borderColor: '#ffeb3b', 
+                backgroundColor: 'rgba(255, 235, 59, 0.1)',
+                fill: true,
+                borderWidth: 2, 
+                pointRadius: 0 
+            }]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { ticks: { color: '#aaa' }, grid: { color: '#333' } }, y: { display: false } }
+            }
+        });
+    }
+
+    function calculatePotentialLandscape() {
+        const points = 300;
+        const endZ = params.magnetGroups * params.magnetSpacing + 5;
+        const step = endZ / points;
+        
+        const labels = [];
+        const data = [];
+
+        for (let i = 0; i <= points; i++) {
+            const z = i * step;
+            const u = getTotalPotentialAt(z);
+            labels.push(z.toFixed(1));
+            data.push(u);
+        }
+
+        pChart.data.labels = labels;
+        pChart.data.datasets[0].data = data;
+        pChart.update();
+    }
+
+    // --- 創建軌道 (幾何變形邏輯) ---
+    function createTrack() {
+        trackMagnets.forEach(m => { scene.remove(m.mesh); if (m.mesh.geometry) m.mesh.geometry.dispose(); });
+        trackMagnets = [];
+
+        // 照片中是圓餅形磁鐵
+        const magnetGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 32); 
+        
+        for (let i = 0; i < params.magnetGroups; i++) {
+            const zPos = i * params.magnetSpacing;
+            
+            // 計算當前寬度：起點寬度 - (距離 * 收斂率)
+            let currentHalfWidth = (params.trackWidthStart / 2) - (zPos * params.trackTaper);
+            
+            // 避免寬度變成負的
+            if (currentHalfWidth < 0.5) currentHalfWidth = 0.5;
+
+            let momentL, momentR;
+            let matColor = 0x888888; // 預設灰
+
+            // 排列模式
+            if (params.arrangement === 'Vertical_Up') {
+                // 照片模式：全部垂直向上 (0, 1, 0)
+                momentL = new THREE.Vector3(0, 1, 0);
+                momentR = new THREE.Vector3(0, 1, 0);
+                matColor = 0xff0000; // 紅色表示 N 極向上
+            } 
+            else if (params.arrangement === 'Parallel_Repel') {
+                // 水平互斥
+                momentL = new THREE.Vector3(1, 0, 0);
+                momentR = new THREE.Vector3(-1, 0, 0);
+                matColor = 0x0000ff;
+            }
+
+            // 建立模型
+            const mat = new THREE.MeshStandardMaterial({ color: matColor });
+            
+            // 左側
+            const magL = new THREE.Mesh(magnetGeo, mat);
+            magL.position.set(-currentHalfWidth, 0.1, zPos);
+            scene.add(magL);
+            trackMagnets.push({ mesh: magL, moment: momentL, side: 'left' });
+
+            // 右側
+            const magR = new THREE.Mesh(magnetGeo, mat);
+            magR.position.set(currentHalfWidth, 0.1, zPos);
+            scene.add(magR);
+            trackMagnets.push({ mesh: magR, moment: momentR, side: 'right' });
+        }
+    }
+
+    // --- 創建車輛 ---
+    function createVehicle() {
+        if (vehicle) scene.remove(vehicle);
+        vehicle = new THREE.Group();
+
+        // 使用 wheelSpacing 來決定車軸長度與車輪位置
+        const wheelOffsetX = params.wheelSpacing / 2;
+        const axleLength = (wheelOffsetX * 2) + 0.5;
+        
+        const axle = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.05, axleLength, 16),
+            new THREE.MeshStandardMaterial({ color: 0xaaaaaa })
+        );
+        axle.rotation.z = Math.PI / 2;
+        vehicle.add(axle);
+
+        // 車輪 (圓餅磁鐵)
+        const wheelGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 32);
+        const materials = [
+            new THREE.MeshStandardMaterial({ color: 0x333333 }),
+            new THREE.MeshStandardMaterial({ color: 0xff0000 }), // N
+            new THREE.MeshStandardMaterial({ color: 0x0000ff })  // S
+        ]; 
+        
+        // 左輪
+        const wheelL = new THREE.Mesh(wheelGeo, materials);
+        wheelL.position.set(-wheelOffsetX, 0, 0);
+        wheelL.rotation.z = Math.PI / 2; // 頂面朝 -X (S)
+        vehicle.add(wheelL);
+
+        // 右輪
+        const wheelR = new THREE.Mesh(wheelGeo, materials);
+        wheelR.position.set(wheelOffsetX, 0, 0);
+        wheelR.rotation.z = -Math.PI / 2; // 頂面朝 +X (N)
+        vehicle.add(wheelR);
+
+        vehicle.position.set(0, 0.8, 0);
+        scene.add(vehicle);
+
+        physicsState.position.set(0, 0.8, 0);
+        physicsState.velocity.set(0, 0, 0);
+        simulationTime = 0;
+    }
+
+    // --- 物理核心 ---
+    function updatePhysics() {
+        if (!isSimulating) return;
+
+        simulationTime += CONSTANTS.dt;
+
+        const currentZ = physicsState.position.z;
+        const delta = 0.01; 
+
+        // 微分求力 (保守場梯度)
+        const u_center = getTotalPotentialAt(currentZ); // 計算當前位能用於數據記錄
+        const u1 = getTotalPotentialAt(currentZ - delta);
+        const u2 = getTotalPotentialAt(currentZ + delta);
+        const forceZ = -(u2 - u1) / (2 * delta); 
+
+        const v = physicsState.velocity.z;
+        const normalForce = params.vehicleMass * CONSTANTS.gravity;
+        
+        // 阻力計算
+        let fRoll = 0;
+        if (Math.abs(v) > 0.01) {
+            fRoll = -Math.sign(v) * params.rollingFriction * normalForce;
+        } else if (Math.abs(forceZ) > params.rollingFriction * normalForce) {
+            fRoll = -Math.sign(forceZ) * params.rollingFriction * normalForce;
+        } else {
+            fRoll = -forceZ; 
+        }
+
+        const fDrag = -v * params.viscousDamping;
+
+        const totalForce = forceZ + fRoll + fDrag;
+        const acc = totalForce / params.vehicleMass;
+
+        physicsState.acceleration.z = acc;
+        physicsState.velocity.z += acc * CONSTANTS.dt;
+        physicsState.position.z += physicsState.velocity.z * CONSTANTS.dt;
+
+        // 記錄數據
+        simulationData.push({
+            time: simulationTime.toFixed(3),
+            z: physicsState.position.z.toFixed(3),
+            v: physicsState.velocity.z.toFixed(3),
+            a: physicsState.acceleration.z.toFixed(3),
+            u: u_center.toFixed(3)
+        });
+
+        vehicle.position.z = physicsState.position.z;
+        const wheelRadius = 0.8;
+        const angularVel = physicsState.velocity.z / wheelRadius;
+        vehicle.children[1].rotation.x -= angularVel * CONSTANTS.dt;
+        vehicle.children[2].rotation.x -= angularVel * CONSTANTS.dt;
+
+        // 相機跟隨
+        camera.position.z = vehicle.position.z - 12;
+        camera.lookAt(0, 0, vehicle.position.z + 5);
+
+        updateUI();
+        updateCharts();
+    }
+
+    let chartUpdateCounter = 0;
+    function updateCharts() {
+        if (chartUpdateCounter++ % 4 !== 0) return;
+        const t = simulationTime.toFixed(1);
+        vChart.data.labels.push(t);
+        vChart.data.datasets[0].data.push(physicsState.velocity.z);
+        if (vChart.data.labels.length > 80) {
+            vChart.data.labels.shift();
+            vChart.data.datasets[0].data.shift();
+        }
+        vChart.update('none');
+    }
+
+    function updateUI() {
+        document.getElementById('timeDisplay').innerText = simulationTime.toFixed(2);
+        document.getElementById('velocity').innerText = Math.abs(physicsState.velocity.z).toFixed(2);
+        document.getElementById('distance').innerText = physicsState.position.z.toFixed(2);
+        const speedPercent = (Math.abs(physicsState.velocity.z) / 8) * 100;
+        document.getElementById('speedBar').style.width = Math.min(speedPercent, 100) + '%';
+        
+        if (physicsState.position.z > params.magnetGroups * params.magnetSpacing + 5 && Math.abs(physicsState.velocity.z) < 0.1) {
+            isSimulating = false;
+            document.getElementById('status').innerText = "模擬結束";
+        }
+    }
+
+    function resetSimulation() {
+        isSimulating = false;
+        simulationTime = 0;
+        simulationData = []; // 清空數據記錄
+        physicsState.position.set(0, 0.8, 0);
+        physicsState.velocity.set(0, 0, 0);
+        vehicle.position.set(0, 0.8, 0);
+        
+        document.getElementById('status').innerText = "已重置";
+        createTrack();
+        createVehicle(); // 重新建立車輛以重置位置與參數
+        vChart.data.labels = [];
+        vChart.data.datasets[0].data = [];
+        vChart.update();
+        calculatePotentialLandscape();
+
+        // 強制重置相機位置，讓使用者看到車子回到起點
+        camera.position.set(-15, 12, 15);
+        camera.lookAt(0, 0, 5);
+        // 或者使用跟隨邏輯：
+        camera.position.z = vehicle.position.z - 12;
+        camera.lookAt(0, 0, vehicle.position.z + 5);
+    }
+
+    function toggleSimulation() {
+        if (isSimulating) {
+            isSimulating = false;
+            document.getElementById('status').innerText = "暫停";
+        } else {
+            isSimulating = true;
+            document.getElementById('status').innerText = "模擬中";
+            if (simulationTime === 0) physicsState.velocity.z = params.initialVelocity;
+        }
+    }
+
+    // --- 匯出 CSV 功能 ---
+    function exportToCSV() {
+        if (simulationData.length === 0) {
+            alert("目前沒有數據可匯出。請先執行模擬！");
+            return;
+        }
+
+        // CSV Header
+        let csvContent = "Time (s),Position Z (m),Velocity (m/s),Acceleration (m/s^2),Potential Energy (U)\n";
+
+        // CSV Rows
+        simulationData.forEach(row => {
+            csvContent += `${row.time},${row.z},${row.v},${row.a},${row.u}\n`;
+        });
+
+        // 建立 Blob 與下載連結
+        // 使用 BOM (\uFEFF) 讓 Excel 能正確識別 UTF-8 中文 (雖然這裡 Header 是英文，但習慣上加上較保險)
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "magnetic_sim_data.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // --- GUI ---
+    function setupGUI() {
+        const gui = new dat.GUI({ autoPlace: false });
+        document.getElementById('controls').appendChild(gui.domElement);
+
+        const f1 = gui.addFolder('幾何與磁鐵 (Geometry)');
+        f1.add(params, 'arrangement', ['Vertical_Up', 'Parallel_Repel']).name('排列模式').onChange(resetSimulation);
+        f1.add(params, 'trackTaper', -0.5, 0.5).step(0.01).name('軌道收斂率 (Taper)').onChange(resetSimulation);
+        f1.add(params, 'trackWidthStart', 2.0, 5.0).name('起點寬度').onChange(resetSimulation);
+        f1.add(params, 'wheelSpacing', 1.0, 5.0).step(0.1).name('輪子間距').onChange(resetSimulation); // 新增輪子間距
+        f1.add(params, 'magnetSpacing', 1.0, 3.0).name('間距').onChange(resetSimulation);
+        f1.open();
+
+        const f2 = gui.addFolder('物理參數');
+        f2.add(params, 'initialVelocity', 0, 10).name('初速 V0');
+        f2.add(params, 'magnetStrength', 10, 300).name('磁矩強度').onChange(resetSimulation);
+        f2.add(params, 'rollingFriction', 0.0, 0.2).step(0.005).name('滾動摩擦 μ');
+        f2.open();
+
+        gui.add(params, 'startStop').name('開始 / 暫停');
+        gui.add(params, 'reset').name('重置');
+        gui.add(params, 'exportData').name('匯出數據 (Export CSV)'); // 新增按鈕
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    // Mouse Controls
+    let isDragging = false, prevPos = {x:0, y:0};
+    function setupMouseControls() {
+        document.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', e => { prevPos = {x:e.clientX, y:e.clientY}; });
+        document.addEventListener('wheel', e => {
+            camera.fov += e.deltaY * 0.05;
+            camera.updateProjectionMatrix();
+        });
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        updatePhysics();
+        renderer.render(scene, camera);
+    }
+
+    init();
+</script>
+</body>
+</html>

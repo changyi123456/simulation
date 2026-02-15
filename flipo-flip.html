@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flipo Flip 物理數據分析 (完整控制版)</title>
+    <title>Flipo Flip 物理數據分析 (Camera Fix)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
             --panel-bg: #1e1e1e;
             --text-color: #e0e0e0;
-            --accent-color: #00E676;
-            --accent-hover: #00C853;
+            --accent-color: #FF5252;
+            --accent-hover: #FF1744;
             --border-color: #333;
             --graph-bg: #181818;
-            --graph-v: #29B6F6;     /* 質心速度顏色 */
-            --graph-v-tip: #EA80FC; /* 頂端速度顏色 (加亮) */
-            --graph-w: #FFCA28;
-            --graph-a: #F44336;
+            --graph-v: #40C4FF;     
+            --graph-v-tip: #E040FB; 
+            --graph-w: #FFD740;
+            --graph-a: #FF5252;
         }
 
         body {
@@ -88,7 +88,7 @@
 
         button {
             background-color: var(--accent-color);
-            color: #000;
+            color: white;
             border: none;
             padding: 12px;
             border-radius: 6px;
@@ -171,12 +171,22 @@
             font-size: 0.8rem;
             pointer-events: none;
         }
+        
+        .correction-note {
+            font-size: 0.75rem;
+            color: #ff9e80;
+            margin-top: 5px;
+            line-height: 1.4;
+            background: rgba(255,87,34,0.1);
+            padding: 8px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
     <div id="controls">
-        <h1>Flipo Flip 分析系統</h1>
+        <h1>Flipo Flip 高精度分析</h1>
         
         <div class="control-group">
             <h3>環境設定 (Incline)</h3>
@@ -186,14 +196,20 @@
 
         <div class="control-group">
             <h3>物理性質 (Physics)</h3>
-            <label>表面摩擦力: <span id="val-friction" class="value-display">0.6</span></label>
-            <input type="range" id="friction" min="0.1" max="1.0" step="0.05" value="0.6" oninput="resetSimulation()">
+            
+            <div class="correction-note">
+                攝影機修復版<br>
+                摩擦與迭代維持高精度
+            </div>
 
-            <label>彈性係數: <span id="val-restitution" class="value-display">0.5</span></label>
-            <input type="range" id="restitution" min="0.0" max="1.0" step="0.1" value="0.5" oninput="resetSimulation()">
+            <label>表面摩擦力 (Traction): <span id="val-friction" class="value-display">0.8</span></label>
+            <input type="range" id="friction" min="0.1" max="1.0" step="0.05" value="0.8" oninput="resetSimulation()">
 
-            <label>滾動阻力 (α): <span id="val-rollingFriction" class="value-display">0.01</span></label>
-            <input type="range" id="rollingFriction" min="0.0" max="0.1" step="0.005" value="0.01" oninput="resetSimulation()">
+            <label>彈性係數 (Bounciness): <span id="val-restitution" class="value-display">0.6</span></label>
+            <input type="range" id="restitution" min="0.0" max="1.0" step="0.05" value="0.6" oninput="resetSimulation()">
+
+            <label>滾動阻力 (α): <span id="val-rollingFriction" class="value-display">0.00</span></label>
+            <input type="range" id="rollingFriction" min="0.0" max="0.05" step="0.001" value="0.00" oninput="resetSimulation()">
         </div>
 
         <div class="control-group">
@@ -202,17 +218,12 @@
             <input type="range" id="radius" min="0.01" max="0.05" step="0.001" value="0.02" oninput="resetSimulation()">
 
             <label>長寬比: <span id="val-aspectRatio" class="value-display">1.8</span></label>
-            <input type="range" id="aspectRatio" min="1.1" max="5" step="0.1" value="1.8" oninput="resetSimulation()">
+            <input type="range" id="aspectRatio" min="1.1" max="5.0" step="0.1" value="1.8" oninput="resetSimulation()">
         </div>
 
         <button onclick="resetSimulation()">重新開始實驗</button>
         <button id="pauseBtn" onclick="togglePause()" style="background-color: #444; color: white;">暫停</button>
-        <button onclick="exportData()" style="background-color: #E65100; color: white;">匯出 CSV 數據</button>
-
-        <div style="font-size: 0.75rem; color: #666; margin-top: 10px;">
-            * 藍線：質心速度 | 紫線：頂端點速度<br>
-            * 物體起始狀態：直立於斜面上
-        </div>
+        <button onclick="exportData()" style="background-color: #0091EA; color: white;">匯出 CSV 數據</button>
     </div>
 
     <div id="main-area">
@@ -225,7 +236,7 @@
                 <div class="stat-row">相對角 (θ): <span id="stat-theta" class="stat-value">1.57</span> rad</div>
             </div>
             <div id="canvas-container" style="width:100%; height:100%;"></div>
-            <div id="watermark">物理實驗室 | IG: aiphysicsteacher</div>
+            <div id="watermark">物理實驗室 | Camera Fixed</div>
         </div>
 
         <div id="graphs-container">
@@ -251,7 +262,7 @@
         const PX_PER_METER = 2000; 
         const MAX_POINTS = 600;
 
-        const { Engine, Render, Runner, Bodies, Body, Composite, Events, Vector } = Matter;
+        const { Engine, Render, Runner, Bodies, Body, Composite, Events, Vector, Bounds } = Matter;
         let engine, render, runner, flipoBody, slopeBody;
         let simulationTime = 0;
         let isPaused = false;
@@ -281,7 +292,6 @@
                 const vals = Array.isArray(values) ? values : [values];
                 vals.forEach((v, i) => {
                     if (this.datasets[i]) {
-                        // 嚴格過濾無效數值
                         if (!isFinite(v) || isNaN(v)) return;
                         this.datasets[i].push({t, val: v});
                         if (this.datasets[i].length > MAX_POINTS) this.datasets[i].shift();
@@ -294,11 +304,9 @@
                 const { ctx, width, height, datasets, colors } = this;
                 ctx.clearRect(0, 0, width, height);
                 
-                // 檢查是否有任何數據
                 const hasData = datasets.some(ds => ds.length > 1);
                 if (!hasData) return;
 
-                // 計算所有數據集的時間範圍 (避免依賴單一數據集)
                 let minT = Infinity, maxT = -Infinity;
                 let allVals = [];
 
@@ -310,19 +318,18 @@
                     }
                 });
 
-                const tr = maxT - minT || 1; // 時間範圍
+                const tr = maxT - minT || 1;
                 
-                // Y軸最大值計算
                 let maxVal = Math.max(...allVals, 0.1);
                 if (!isFinite(maxVal)) maxVal = 1; 
-                maxVal *= 1.2; // 留點邊距
+                maxVal *= 1.2;
 
                 datasets.forEach((data, dIdx) => {
                     if (data.length < 2) return;
 
                     ctx.beginPath();
                     ctx.strokeStyle = colors[dIdx];
-                    ctx.lineWidth = 2.5; // 加粗線條
+                    ctx.lineWidth = 2.5;
                     ctx.lineJoin = 'round';
                     
                     let hasStarted = false;
@@ -341,7 +348,6 @@
                     });
                     ctx.stroke();
                     
-                    // 顯示最新數值
                     const lastVal = data[data.length-1].val;
                     ctx.fillStyle = colors[dIdx];
                     ctx.font = 'bold 11px Consolas, monospace';
@@ -357,9 +363,9 @@
 
         function init() {
             engine = Engine.create();
-            // 修正物理運算迭代次數以提高穩定性
-            engine.positionIterations = 8;
-            engine.velocityIterations = 8;
+            engine.positionIterations = 20;
+            engine.velocityIterations = 20;
+            engine.gravity.y = 1; 
 
             const container = document.getElementById('canvas-container');
             const wrapper = document.getElementById('canvas-wrapper');
@@ -372,14 +378,20 @@
                     height: wrapper.clientHeight,
                     background: 'transparent',
                     wireframes: false,
-                    showAngleIndicator: false
+                    showAngleIndicator: false,
+                    // 移除 pixelRatio 以避免座標系混淆
+                    hasBounds: true // 啟用邊界控制
                 }
             });
 
-            runner = Runner.create();
-            graphV = new RealtimeGraph('canvas-v-t', ['#29B6F6', '#EA80FC']);
-            graphOmega = new RealtimeGraph('canvas-omega-t', '#FFCA28');
-            graphTheta = new RealtimeGraph('canvas-theta-t', '#F44336');
+            runner = Runner.create({
+                isFixed: true,
+                delta: 1000 / 60
+            });
+            
+            graphV = new RealtimeGraph('canvas-v-t', ['#40C4FF', '#E040FB']);
+            graphOmega = new RealtimeGraph('canvas-omega-t', '#FFD740');
+            graphTheta = new RealtimeGraph('canvas-theta-t', '#FF5252');
 
             Events.on(render, 'afterRender', updateLoop);
             
@@ -397,7 +409,6 @@
             graphOmega.reset();
             graphTheta.reset();
 
-            // 讀取所有參數
             const slopeDeg = parseFloat(document.getElementById('slopeAngle').value);
             const slopeRad = slopeDeg * Math.PI / 180;
             const radiusM = parseFloat(document.getElementById('radius').value);
@@ -406,148 +417,127 @@
             const rest = parseFloat(document.getElementById('restitution').value);
             const rollFric = parseFloat(document.getElementById('rollingFriction').value);
 
-            // 1. 斜面
-            const slopeWidth = 10000;
+            // 錨點定位：確保物體產生在畫面正中央
+            const viewWidth = render.options.width;
+            const viewHeight = render.options.height;
+            const anchorX = viewWidth / 2;
+            const anchorY = viewHeight / 2 + 100; // 稍微往下放一點
+            
+            const slopeWidth = 20000; 
             const slopeThickness = 40;
-            const centerY = 600;
-            slopeBody = Bodies.rectangle(slopeWidth/2, centerY, slopeWidth, slopeThickness, {
+            
+            const tHalf = slopeThickness / 2;
+            const slopeCx = anchorX - Math.sin(slopeRad) * tHalf;
+            const slopeCy = anchorY + Math.cos(slopeRad) * tHalf;
+
+            slopeBody = Bodies.rectangle(slopeCx, slopeCy, slopeWidth, slopeThickness, {
                 isStatic: true,
                 angle: slopeRad,
                 friction: fric,
+                frictionStatic: fric,
                 render: { fillStyle: '#333' }
             });
 
-            // 2. 物體 (橄欖球體)
             const rPx = radiusM * PX_PER_METER;
             const standingHalfHeight = rPx * ratio; 
             
-            // 生成位置
-            const spawnXOnSlope = 500; 
-            const spawnYOnSlope = centerY + (spawnXOnSlope - slopeWidth/2) * Math.tan(slopeRad);
-
-            // 法線 (垂直斜面向上)
-            const normalX = Math.sin(slopeRad);
-            const normalY = -Math.cos(slopeRad);
-
-            const startX = spawnXOnSlope + normalX * (standingHalfHeight + slopeThickness/2);
-            const startY = spawnYOnSlope + normalY * (standingHalfHeight + slopeThickness/2);
+            const distFromSurface = standingHalfHeight + 0.1; 
             
-            flipoBody = Bodies.circle(startX, startY, rPx, {
+            const ballX = anchorX + Math.sin(slopeRad) * distFromSurface;
+            const ballY = anchorY - Math.cos(slopeRad) * distFromSurface;
+            
+            flipoBody = Bodies.circle(ballX, ballY, rPx, {
                 friction: fric,
+                frictionStatic: fric,
                 restitution: rest,
-                frictionAir: 0.001, // 微量空氣阻力增加數值穩定性
+                frictionAir: 0, 
                 frictionAngular: rollFric,
-                density: 0.01,
-                render: { fillStyle: '#00E676', strokeStyle: '#fff', lineWidth: 2 }
+                density: 0.005,
+                render: { fillStyle: '#FF5252', strokeStyle: '#fff', lineWidth: 2 }
             });
 
             Body.scale(flipoBody, ratio, 1);
-            // 初始角度直立：斜面角度 + 90度
             Body.setAngle(flipoBody, slopeRad + Math.PI/2);
-
+            
             Composite.add(engine.world, [slopeBody, flipoBody]);
-            Render.lookAt(render, flipoBody, { x: 500, y: 400 });
+            
+            // 手動設定初始視角 (不使用 lookAt 以避免縮放錯誤)
+            Bounds.shift(render.bounds, {
+                x: anchorX - viewWidth / 2,
+                y: anchorY - viewHeight / 2
+            });
         }
 
         function updateLoop() {
             if (isPaused || !flipoBody) return;
 
-            // 即時讀取幾何參數供繪圖與計算使用
             const radiusM = parseFloat(document.getElementById('radius').value);
             const ratio = parseFloat(document.getElementById('aspectRatio').value);
             const rPx = radiusM * PX_PER_METER;
 
-            // 處理時間步長 (避免 Infinity)
-            let dt = engine.timing.lastDelta / 1000;
-            if (dt <= 0.0001) dt = 0.0166;
-
+            let dt = runner.delta / 1000; 
             simulationTime += dt;
 
+            // --- 數據計算 ---
             const slopeRad = slopeBody.angle;
-            
-            // --- 角度計算 (Relative Angle) ---
             let rawRelAngle = flipoBody.angle - slopeRad;
-            // 將角度正規化到 [0, PI]
             let theta = Math.abs(Math.atan2(Math.sin(rawRelAngle), Math.cos(rawRelAngle)));
-            // 由於是對稱橢圓，超過 PI/2 就視為另一面，做鏡像處理
             if (theta > Math.PI/2) theta = Math.PI - theta;
 
-            // --- 角速度 (Angular Velocity) ---
-            const omega = flipoBody.angularVelocity / dt; 
+            const omega = flipoBody.angularVelocity / dt * 16.6; 
             const omegaAbs = Math.abs(omega);
 
-            // --- 線速度 1: 質心速度 (CoM Velocity) ---
-            const v_cm_ms = flipoBody.speed / (PX_PER_METER * dt);
+            const v_cm_ms = Vector.magnitude(flipoBody.velocity) / PX_PER_METER / dt * 16.6;
 
-            // --- 線速度 2: 頂端點速度 (Tip Velocity) ---
-            // 頂端點在局部座標 (rPx * ratio, 0)
             const rot = flipoBody.angle;
-            // 轉到世界座標的偏移量
             const rx = Math.cos(rot) * (rPx * ratio);
             const ry = Math.sin(rot) * (rPx * ratio);
+            const vx_cm = flipoBody.velocity.x; 
+            const vy_cm = flipoBody.velocity.y;
+            const angVel = flipoBody.angularVelocity;
+            const vx_tip_world = vx_cm - angVel * ry; 
+            const vy_tip_world = vy_cm + angVel * rx;
+            const v_tip_ms = Math.sqrt(vx_tip_world**2 + vy_tip_world**2) / PX_PER_METER / dt * 16.6;
 
-            // V_p = V_cm + omega x r
-            // V_cm
-            const vx_cm = flipoBody.velocity.x / dt;
-            const vy_cm = flipoBody.velocity.y / dt;
-            // omega x r (二維叉乘結果向量) -> (-omega*ry, omega*rx)
-            // 注意 Matter.js 座標系 Y 向下，但 angularVelocity 方向定義一致
-            const vx_tip = vx_cm - omega * ry; 
-            const vy_tip = vy_cm + omega * rx;
-            const v_tip_ms = Math.sqrt(vx_tip**2 + vy_tip**2) / PX_PER_METER;
-
-            // 數據安全性檢查
-            const safeV = (isFinite(v_cm_ms) && v_cm_ms < 100) ? v_cm_ms : 0;
-            const safeVTip = (isFinite(v_tip_ms) && v_tip_ms < 100) ? v_tip_ms : 0;
-            const safeOmega = (isFinite(omegaAbs) && omegaAbs < 1000) ? omegaAbs : 0;
-
-            // 更新面板
+            // 顯示
             document.getElementById('stat-time').innerText = simulationTime.toFixed(2);
-            document.getElementById('stat-vel').innerText = safeV.toFixed(3);
-            document.getElementById('stat-vel-tip').innerText = safeVTip.toFixed(3);
-            document.getElementById('stat-omega').innerText = safeOmega.toFixed(2);
+            document.getElementById('stat-vel').innerText = v_cm_ms.toFixed(3);
+            document.getElementById('stat-vel-tip').innerText = v_tip_ms.toFixed(3);
+            document.getElementById('stat-omega').innerText = omegaAbs.toFixed(2);
             document.getElementById('stat-theta').innerText = theta.toFixed(3);
 
-            // 更新圖表 (過濾掉模擬最初不穩定的幾幀)
-            if (simulationTime > 0.05) {
-                // 降低採樣頻率以提升效能，每 3 幀更新一次圖表
-                if (Math.floor(simulationTime * 1000) % 48 < 16) { 
-                    graphV.push(simulationTime, [safeV, safeVTip]); 
-                    graphOmega.push(simulationTime, safeOmega);
-                    graphTheta.push(simulationTime, theta);
-
-                    dataLog.push({
-                        t: simulationTime.toFixed(4),
-                        v_cm: safeV.toFixed(4),
-                        v_tip: safeVTip.toFixed(4),
-                        omega: safeOmega.toFixed(4),
-                        theta: theta.toFixed(4)
-                    });
-                }
+            // 繪圖
+            if (simulationTime > 0.05 && Math.floor(simulationTime * 1000) % 48 < 16) { 
+                graphV.push(simulationTime, [v_cm_ms, v_tip_ms]); 
+                graphOmega.push(simulationTime, omegaAbs);
+                graphTheta.push(simulationTime, theta);
+                dataLog.push({t: simulationTime.toFixed(4), v_cm: v_cm_ms.toFixed(4), v_tip: v_tip_ms.toFixed(4), omega: omegaAbs.toFixed(4), theta: theta.toFixed(4)});
             }
 
-            // 攝影機跟隨
-            Render.lookAt(render, flipoBody, { x: 500, y: 400 });
+            // 攝影機跟隨 (手動更新 Bounds 以保持 1:1 比例)
+            const viewWidth = render.options.width;
+            const viewHeight = render.options.height;
+            
+            // 將畫面中心設定在物體位置
+            render.bounds.min.x = flipoBody.position.x - viewWidth / 2;
+            render.bounds.max.x = flipoBody.position.x + viewWidth / 2;
+            render.bounds.min.y = flipoBody.position.y - viewHeight / 2;
+            render.bounds.max.y = flipoBody.position.y + viewHeight / 2;
 
-            // 繪製視覺輔助 (軸線與頂點)
+            // 輔助線
             const ctx = render.context;
             ctx.save();
             ctx.translate(flipoBody.position.x, flipoBody.position.y);
             ctx.rotate(flipoBody.angle);
-            
-            // 長軸
             ctx.beginPath();
-            ctx.strokeStyle = "rgba(0,0,0,0.3)";
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
             ctx.lineWidth = 2;
             ctx.moveTo(-rPx * ratio, 0); ctx.lineTo(rPx * ratio, 0);
             ctx.stroke();
-
-            // 頂點標記
             ctx.beginPath();
-            ctx.fillStyle = "#EA80FC";
-            ctx.arc(rPx * ratio, 0, 5, 0, Math.PI * 2);
+            ctx.fillStyle = "#E040FB";
+            ctx.arc(rPx * ratio, 0, 6, 0, Math.PI * 2);
             ctx.fill();
-            
             ctx.restore();
         }
 
@@ -570,11 +560,10 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `flipo_full_data_${Date.now()}.csv`;
+            a.download = `flipo_high_precision_${Date.now()}.csv`;
             a.click();
         }
 
-        // UI 數值即時更新顯示
         document.querySelectorAll('input[type="range"]').forEach(input => {
             input.addEventListener('input', e => {
                 document.getElementById('val-' + e.target.id).innerText = e.target.value;
@@ -582,7 +571,6 @@
         });
 
         window.onload = init;
-        // 視窗大小改變時重繪圖表尺寸
         window.addEventListener('resize', () => {
             if(graphV) graphV.resize();
             if(graphOmega) graphOmega.resize();
@@ -591,4 +579,3 @@
     </script>
 </body>
 </html>
-

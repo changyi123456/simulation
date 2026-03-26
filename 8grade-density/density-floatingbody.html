@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>浮體密度測量實驗室 - 數據追蹤版</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 與 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow-x: hidden; }
+        [draggable="true"] { user-select: none; }
+        .water-transition { transition: height 0.7s ease-in-out; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ==========================================
+        // 1. Interaction Logger (數據追蹤工具)
+        // ==========================================
+        const STORAGE_KEY = "TaskInteractionData";
+        let interactionHistory = [];
+
+        const InteractionLogger = {
+            init: function() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            interactionHistory = parsed;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse existing interaction data", e);
+                        interactionHistory = [];
+                    }
+                }
+                this.log('Initialize', { timestamp: new Date().toISOString(), sim: "Floating_Density_Measurement_Lab" });
+            },
+
+            log: function(action, details = {}) {
+                const event = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details
+                };
+                interactionHistory.push(event);
+                // 防止資料過大，保留最新 500 筆
+                if (interactionHistory.length > 500) {
+                    interactionHistory.shift();
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
+            },
+
+            clear: function() {
+                interactionHistory = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            }
+        };
+
+        // ==========================================
+        // 2. React 應用程式
+        // ==========================================
+        const { useState, useEffect } = React;
+
+        // 定義實驗物體
+        // 鐵塊 (沉體) - 密度 7.8
+        const SINKER = { id: 'sinker', name: '鐵塊(沉體)', mass: 78.0, volume: 10.0, color: 'bg-slate-700', shape: 'rounded-sm', size: 'w-10 h-10', text: 'text-white' };
+        // 木塊 (浮體) - 質量改為 20g，體積改為 40 (為了讓密度 20÷40 = 0.5 方便學生整除計算)
+        const FLOATER = { id: 'floater', name: '木塊(浮體)', mass: 20.0, volume: 40.0, color: 'bg-amber-700', shape: 'rounded-md', size: 'w-14 h-12', text: 'text-white' };
+        
+        const MAX_WATER = 150.0;
+
+        function App() {
+          // 初始化 Logger
+          useEffect(() => {
+            InteractionLogger.init();
+          }, []);
+
+          // 物體位置
+          const [location, setLocation] = useState({ sinker: 'table', floater: 'table' });
+          // 是否綁在一起
+          const [isTied, setIsTied] = useState(false);
+          
+          const [baseWaterVolume, setBaseWaterVolume] = useState(50.0);
+          const [isBalanceOn, setIsBalanceOn] = useState(true);
+          const [tareOffset, setTareOffset] = useState(0);
+
+          // 專為沉錘法設計的紀錄表單 (改為完全開放的紀錄結構)
+          const [formData, setFormData] = useState({
+            objectName: '單測木塊',
+            mass: '',
+            initialVolume: '',
+            finalVolume: '',
+            calcVolume: '',
+            density: ''
+          });
+
+          const [records, setRecords] = useState([]);
+          const [errorMsg, setErrorMsg] = useState("");
+          const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+          // 處理綁定/解開繩子
+          const handleTieToggle = () => {
+            const willBeTied = !isTied;
+            
+            // 紀錄綁定/解開事件
+            InteractionLogger.log('ToggleTie', { isTied: willBeTied });
+
+            if (willBeTied) {
+              // 綁定時，將兩者一起移回桌面
+              setLocation({ sinker: 'table', floater: 'table' });
+            }
+            setIsTied(willBeTied);
+          };
+
+          const handleDragStart = (e, id) => {
+            e.dataTransfer.setData('objectId', isTied ? 'bound' : id);
+          };
+
+          const handleDragOver = (e) => { e.preventDefault(); };
+
+          const handleDrop = (e, zone) => {
+            e.preventDefault();
+            const objectId = e.dataTransfer.getData('objectId');
+            if (!objectId) return;
+
+            // 紀錄物體移動事件
+            const fromZone = objectId === 'bound' ? location.sinker : location[objectId];
+            if (fromZone !== zone) {
+              InteractionLogger.log('MoveObject', { object: objectId, from: fromZone, to: zone });
+            }
+
+            setLocation(prev => {
+              const newLoc = { ...prev };
+              if (objectId === 'bound') {
+                newLoc.sinker = zone;
+                newLoc.floater = zone;
+              } else {
+                newLoc[objectId] = zone;
+                // 防止兩個獨立物體同時放在同一個小區域 (量杯除外，量杯可以放兩個)
+                if (zone === 'balance') {
+                   const otherId = objectId === 'sinker' ? 'floater' : 'sinker';
+                   if (newLoc[otherId] === 'balance') newLoc[otherId] = 'table';
+                }
+              }
+              return newLoc;
+            });
+          };
+
+          // 計算電子秤質量
+          const rawMass = () => {
+            let m = 0;
+            if (location.sinker === 'balance') m += SINKER.mass;
+            if (location.floater === 'balance') m += FLOATER.mass;
+            return m;
+          };
+          const displayMass = rawMass() - tareOffset;
+
+          const handleTare = () => { 
+            if (isBalanceOn) {
+                setTareOffset(rawMass()); 
+                // 紀錄歸零事件
+                InteractionLogger.log('TareBalance', { offset: rawMass() });
+            }
+          };
+          
+          const handlePower = () => {
+            const newState = !isBalanceOn;
+            // 紀錄開關機事件
+            InteractionLogger.log('ToggleBalancePower', { isOn: newState });
+            
+            setIsBalanceOn(newState);
+            if (!newState) setTareOffset(0);
+          };
+
+          // 計算排水量 (核心物理邏輯)
+          let currentDisplacement = 0;
+          if (baseWaterVolume > 0) {
+            // 處理浮體
+            if (location.floater === 'beaker') {
+                if (isTied && location.sinker === 'beaker') {
+                    // 綁在一起，且沉體夠重能把它拉下去 -> 完全沒入
+                    currentDisplacement += FLOATER.volume;
+                } else {
+                    // 浮在水面上 -> 根據阿基米德原理，排開與自身重量相同的水
+                    currentDisplacement += FLOATER.mass; 
+                }
+            }
+            // 處理沉體
+            if (location.sinker === 'beaker') {
+                currentDisplacement += SINKER.volume;
+            }
+
+            // 陷阱：水量太少無法完全沒入
+            if (baseWaterVolume < 20 && currentDisplacement > 0) {
+                currentDisplacement *= 0.6; // 產生誤差
+            }
+          }
+          const currentWaterVolume = baseWaterVolume + currentDisplacement;
+
+          // 加減水
+          const handleAddWater = () => {
+            setBaseWaterVolume(prev => {
+                const newVal = Math.min(prev + 10, 100);
+                InteractionLogger.log('ChangeWaterVolume', { action: 'add', newVolume: newVal });
+                return newVal;
+            });
+          };
+          
+          const handleRemoveWater = () => {
+            setBaseWaterVolume(prev => {
+                const newVal = Math.max(prev - 10, 0);
+                InteractionLogger.log('ChangeWaterVolume', { action: 'remove', newVolume: newVal });
+                return newVal;
+            });
+          };
+
+          const handleInputChange = (e) => {
+            const { name, value } = e.target;
+            setFormData(prev => ({ ...prev, [name]: value }));
+          };
+
+          const handleRecord = () => {
+            if (!formData.mass && !formData.initialVolume && !formData.finalVolume && !formData.calcVolume && !formData.density) {
+              setErrorMsg("請至少輸入一項數據再紀錄！");
+              return;
+            }
+            setErrorMsg("");
+
+            // 紀錄儲存數據事件
+            InteractionLogger.log('SaveRecord', { data: formData });
+
+            setRecords(prev => [...prev, { ...formData, id: Date.now() }]);
+            // 紀錄後保留下拉選單的選項，但清空輸入欄位
+            setFormData(prev => ({ ...prev, mass: '', initialVolume: '', finalVolume: '', calcVolume: '', density: '' }));
+          };
+
+          const handleClearRecords = () => {
+            // 紀錄清除數據事件
+            InteractionLogger.log('ClearRecords');
+
+            setRecords([]);
+            setShowClearConfirm(false);
+          };
+
+          // 繪製物體元件 (包含獨立與綁定狀態)
+          const RenderObjects = ({ currentZone }) => {
+            const isBeaker = currentZone === 'beaker';
+            const isBalance = currentZone === 'balance';
+            
+            // 計算浮木的高度位置 (浮在水面上)
+            const waterHeightPercent = (currentWaterVolume / MAX_WATER) * 100;
+            const floatBottom = isBeaker ? `calc(${waterHeightPercent}% - 10px)` : 'auto';
+            const sinkBottom = isBeaker ? '10px' : (isBalance ? '15px' : 'auto');
+
+            if (isTied) {
+                // 綁定狀態，只要其中一個在這個區域就一起顯示
+                if (location.sinker !== currentZone) return null;
+                return (
+                    <div
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, 'bound')}
+                        className="absolute z-10 flex flex-col items-center cursor-grab active:cursor-grabbing hover:ring-4 hover:ring-yellow-400 transition-all group"
+                        style={{
+                            bottom: sinkBottom,
+                            left: currentZone === 'table' ? 'auto' : '50%',
+                            transform: currentZone === 'table' ? 'none' : 'translateX(-50%)'
+                        }}
+                    >
+                        {/* 浮體在上 */}
+                        <div className={`${FLOATER.color} ${FLOATER.shape} ${FLOATER.size} ${FLOATER.text} flex items-center justify-center font-bold text-xs shadow-md z-20`}>木塊</div>
+                        {/* 繩子 */}
+                        <div className="w-1 h-6 bg-gray-300 border-x border-dashed border-gray-500 z-10 -my-1"></div>
+                        {/* 沉體在下 */}
+                        <div className={`${SINKER.color} ${SINKER.shape} ${SINKER.size} ${SINKER.text} flex items-center justify-center font-bold text-xs shadow-md z-20`}>鐵塊</div>
+                        
+                        <div className="absolute -top-6 whitespace-nowrap bg-black/70 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">已綁定</div>
+                    </div>
+                );
+            }
+
+            // 獨立狀態
+            return (
+                <>
+                    {location.floater === currentZone && (
+                        <div
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'floater')}
+                            className={`${FLOATER.color} ${FLOATER.shape} ${FLOATER.size} ${FLOATER.text} flex items-center justify-center font-bold text-xs shadow-md cursor-grab active:cursor-grabbing hover:ring-4 hover:ring-yellow-400 absolute z-20 transition-all duration-700`}
+                            style={{
+                                bottom: currentZone === 'table' ? 'auto' : (isBeaker ? floatBottom : (isBalance ? '15px' : 'auto')),
+                                left: currentZone === 'table' ? '20%' : '50%',
+                                transform: currentZone === 'table' ? 'none' : 'translateX(-50%)'
+                            }}
+                        >木塊</div>
+                    )}
+                    {location.sinker === currentZone && (
+                        <div
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'sinker')}
+                            className={`${SINKER.color} ${SINKER.shape} ${SINKER.size} ${SINKER.text} flex items-center justify-center font-bold text-xs shadow-md cursor-grab active:cursor-grabbing hover:ring-4 hover:ring-yellow-400 absolute z-10 transition-all`}
+                            style={{
+                                bottom: currentZone === 'table' ? 'auto' : sinkBottom,
+                                left: currentZone === 'table' ? '60%' : '50%',
+                                transform: currentZone === 'table' ? 'none' : 'translateX(-50%)'
+                            }}
+                        >鐵塊</div>
+                    )}
+                </>
+            );
+          };
+
+          return (
+            <div className="min-h-screen bg-stone-100 p-4 sm:p-6 font-sans text-gray-800 flex flex-col lg:flex-row gap-6 selection:bg-blue-200">
+              {/* 左側：實驗模擬區 */}
+              <div className="flex-grow w-full lg:w-2/3 bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col border-t-8 border-amber-600">
+                <div className="mb-4 border-b pb-4">
+                  <h1 className="text-xl sm:text-2xl font-bold text-amber-800 flex items-center gap-2">
+                    🪵 浮體密度測量實驗
+                  </h1>
+                  <p className="text-sm sm:text-base text-gray-600 mt-2 leading-relaxed">
+                    <strong>操作任務：</strong> 目標是測量出「木塊(浮體)」的密度。
+                  </p>
+                </div>
+
+                <div className="flex-grow flex relative mt-4">
+                  {/* 電子秤區域 */}
+                  <div 
+                    className="w-1/2 flex flex-col items-center justify-end pb-10 border-r border-gray-200"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, 'balance')}
+                  >
+                    <div className="text-base sm:text-lg font-bold mb-8 text-gray-700 bg-gray-100 px-4 py-1 rounded-full">電子秤</div>
+                    <div className="relative flex flex-col items-center">
+                      <div className="w-32 sm:w-40 h-8 bg-gray-300 rounded-t-full border-2 border-gray-400 relative flex justify-center items-end">
+                         <RenderObjects currentZone="balance" />
+                      </div>
+                      <div className="w-40 sm:w-48 h-24 bg-gray-200 border-2 border-gray-400 rounded-b-lg shadow-inner flex items-center justify-center flex-col relative z-30">
+                        <div className={`border-2 border-gray-500 w-[85%] h-12 rounded flex items-center justify-end px-2 sm:px-3 shadow-inner font-mono text-xl sm:text-2xl font-bold ${isBalanceOn ? 'bg-green-100 text-gray-800' : 'bg-green-900/20 text-transparent'}`}>
+                          {isBalanceOn ? (
+                            <>
+                              {displayMass.toFixed(1)} <span className="text-xs sm:text-sm ml-1 text-gray-500">g</span>
+                            </>
+                          ) : "000.0 g"}
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-gray-500 mt-2 flex gap-2 sm:gap-4">
+                          <button onClick={handleTare} className="bg-gray-300 px-2 py-1 rounded shadow hover:bg-gray-400 active:translate-y-px transition-colors font-bold">TARE</button>
+                          <button onClick={handlePower} className={`px-2 py-1 rounded shadow active:translate-y-px transition-colors text-white font-bold ${isBalanceOn ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}>
+                            {isBalanceOn ? 'OFF' : 'ON'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs sm:text-sm text-gray-400 text-center">拖曳至秤盤上</div>
+                  </div>
+
+                  {/* 量杯區域 */}
+                  <div 
+                    className="w-1/2 flex flex-col items-center justify-end pb-10 relative"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, 'beaker')}
+                  >
+                    <div className="text-base sm:text-lg font-bold mb-2 text-gray-700 bg-blue-50 px-4 py-1 rounded-full text-blue-800 border border-blue-200">量杯 (150mL)</div>
+                    
+                    <div className="flex gap-2 mb-6">
+                      <button onClick={handleAddWater} className="bg-blue-500 text-white px-2 sm:px-3 py-1 rounded shadow hover:bg-blue-600 active:translate-y-px text-[10px] sm:text-xs font-bold transition-colors">➕ 加水</button>
+                      <button onClick={handleRemoveWater} className="bg-blue-200 text-blue-900 px-2 sm:px-3 py-1 rounded shadow hover:bg-blue-300 active:translate-y-px text-[10px] sm:text-xs font-bold transition-colors">➖ 倒水</button>
+                    </div>
+                    
+                    <div className="relative w-24 sm:w-32 h-48 sm:h-64 border-l-4 border-r-4 border-b-4 border-gray-300 rounded-b-xl bg-blue-50/20 overflow-hidden flex flex-col justify-end">
+                      <div className="absolute inset-0 z-0 flex flex-col justify-between py-2 sm:py-4 pointer-events-none">
+                        {[140, 120, 100, 80, 60, 40, 20].map((tick) => (
+                          <div key={tick} className="flex items-center w-full">
+                            <div className="h-px bg-gray-400 w-4 sm:w-6"></div>
+                            <span className="text-[8px] sm:text-[10px] text-gray-500 ml-1">{tick}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {baseWaterVolume > 0 && (
+                        <div 
+                          className="bg-blue-400/50 w-full water-transition relative z-0"
+                          style={{ height: `${(currentWaterVolume / MAX_WATER) * 100}%` }}
+                        >
+                          <div className="absolute top-0 left-0 w-full h-1 bg-blue-300/80"></div>
+                        </div>
+                      )}
+                      
+                      <RenderObjects currentZone="beaker" />
+                    </div>
+                    <div className="mt-4 text-xs sm:text-sm text-gray-400 text-center bg-white/80 p-1 rounded">
+                      (目前讀數: <span className="font-bold text-blue-600 text-base">
+                        {baseWaterVolume === 0 ? '---' : `${currentWaterVolume.toFixed(1)} mL`}
+                      </span>)
+                    </div>
+                  </div>
+                </div>
+
+                {/* 桌面與繩子工具 */}
+                <div className="mt-6 flex flex-col items-center">
+                    <button 
+                        onClick={handleTieToggle}
+                        className={`mb-3 px-6 py-2 rounded-full font-bold text-sm shadow-md transition-all active:scale-95 flex items-center gap-2 ${isTied ? 'bg-red-100 text-red-700 border-2 border-red-300 hover:bg-red-200' : 'bg-green-100 text-green-700 border-2 border-green-300 hover:bg-green-200'}`}
+                    >
+                        {isTied ? '✂️ 解開繩子' : '🔗 用繩子將兩者綁定'}
+                    </button>
+                    <div 
+                        className="w-full p-4 bg-amber-900/10 rounded-xl border-2 border-dashed border-amber-800/30 flex items-center justify-center min-h-[100px] sm:min-h-[120px] relative"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, 'table')}
+                    >
+                        <div className="absolute top-2 left-4 text-amber-800/50 font-bold text-xs">實驗桌面 (放回原處)</div>
+                        <div className="relative w-full h-full">
+                            <RenderObjects currentZone="table" />
+                        </div>
+                    </div>
+                </div>
+              </div>
+
+              {/* 右側：數據紀錄區 */}
+              <div className="w-full lg:w-1/3 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border-t-8 border-blue-600">
+                <div className="bg-blue-600 text-white p-3 sm:p-4">
+                  <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">📝 實驗數據紀錄表</h2>
+                </div>
+                
+                <div className="p-4 sm:p-5 flex-grow flex flex-col overflow-y-auto">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200 mb-4 sm:mb-6 space-y-2 sm:space-y-3 shadow-sm">
+                    <h3 className="font-bold text-sm sm:text-base text-gray-700 mb-2 border-b pb-2">手動輸入測量結果</h3>
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                      <label className="w-full sm:w-24 text-xs sm:text-sm font-medium text-gray-700">測量狀態</label>
+                      <select name="objectName" value={formData.objectName} onChange={handleInputChange} className="flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 outline-none text-sm bg-white">
+                        <option value="單測木塊">單測木塊 (浮體)</option>
+                        <option value="單測鐵塊">單測鐵塊 (沉體)</option>
+                        <option value="兩者綁定">木塊與鐵塊綁定</option>
+                      </select>
+                    </div>
+
+                    {[
+                      { label: "質量 M(g)", name: "mass", placeholder: "測量質量" },
+                      { label: "原水量 V1(mL)", name: "initialVolume", placeholder: "放入前讀數" },
+                      { label: "後水量 V2(mL)", name: "finalVolume", placeholder: "放入後讀數" },
+                      { label: "體積 V(cm³)", name: "calcVolume", placeholder: "V2 - V1", bg: "bg-blue-50" },
+                    ].map((field) => (
+                      <div key={field.name} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <label className="w-full sm:w-24 text-xs sm:text-sm font-medium text-gray-700">{field.label}</label>
+                        <input type="number" step="0.1" name={field.name} value={formData[field.name]} onChange={handleInputChange} placeholder={field.placeholder} className={`flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 outline-none font-mono text-sm ${field.bg || ''}`} />
+                      </div>
+                    ))}
+
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-3 pt-3 border-t border-gray-300">
+                      <label className="w-full sm:w-24 text-xs sm:text-sm font-bold text-gray-900">密度 D</label>
+                      <div className="flex-1 flex items-center gap-2">
+                          <input type="number" step="0.01" name="density" value={formData.density} onChange={handleInputChange} placeholder="M ÷ V" className="w-full p-2 border-2 border-amber-300 rounded focus:ring-2 focus:ring-amber-500 outline-none font-mono font-bold text-amber-800 bg-amber-50 text-sm" />
+                          <span className="text-xs text-gray-500 font-bold shrink-0">g/cm³</span>
+                      </div>
+                    </div>
+
+                    {errorMsg && <div className="text-red-500 text-xs sm:text-sm mt-2 font-bold text-center bg-red-50 p-1 rounded">{errorMsg}</div>}
+
+                    <button onClick={handleRecord} className="w-full mt-4 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 sm:py-3 px-4 rounded shadow-md transition-transform active:scale-95 text-sm sm:text-base">
+                      📥 紀錄數據
+                    </button>
+                  </div>
+
+                  <div className="flex-grow flex flex-col">
+                    <div className="flex justify-between items-end mb-2">
+                      <h3 className="font-bold text-sm sm:text-base text-gray-700">歷史紀錄</h3>
+                      {showClearConfirm ? (
+                        <div className="flex gap-1 sm:gap-2 items-center">
+                          <span className="text-xs sm:text-sm text-red-600 font-bold">確定清空？</span>
+                          <button onClick={handleClearRecords} className="text-[10px] sm:text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 shadow">確定</button>
+                          <button onClick={() => setShowClearConfirm(false)} className="text-[10px] sm:text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded hover:bg-gray-400 shadow">取消</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowClearConfirm(true)} className="text-xs sm:text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
+                          🗑️ 清除所有
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex-grow border border-gray-300 rounded-lg overflow-hidden flex flex-col bg-white shadow-inner">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-gray-600 whitespace-nowrap">
+                          <thead className="text-[10px] sm:text-xs text-gray-700 bg-gray-200 sticky top-0 border-b border-gray-300">
+                            <tr>
+                              <th className="px-2 py-2">狀態</th>
+                              <th className="px-2 py-2">M(g)</th>
+                              <th className="px-2 py-2">V1(mL)</th>
+                              <th className="px-2 py-2">V2(mL)</th>
+                              <th className="px-2 py-2 text-blue-700">V(cm³)</th>
+                              <th className="px-2 py-2 text-amber-700">D(g/cm³)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {records.length === 0 ? (
+                              <tr><td colSpan="6" className="text-center py-8 text-gray-400 text-xs tracking-widest">尚無紀錄</td></tr>
+                            ) : (
+                              records.map((rec) => (
+                                <tr key={rec.id} className="border-b border-gray-100 hover:bg-amber-50 text-[10px] sm:text-xs transition-colors">
+                                  <td className="px-2 py-2 font-bold max-w-[70px] truncate" title={rec.objectName}>{rec.objectName}</td>
+                                  <td className="px-2 py-2 font-mono font-medium">{rec.mass || '-'}</td>
+                                  <td className="px-2 py-2 font-mono">{rec.initialVolume || '-'}</td>
+                                  <td className="px-2 py-2 font-mono">{rec.finalVolume || '-'}</td>
+                                  <td className="px-2 py-2 font-mono font-bold text-blue-600">{rec.calcVolume || '-'}</td>
+                                  <td className="px-2 py-2 font-mono font-bold text-amber-600">{rec.density || '-'}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

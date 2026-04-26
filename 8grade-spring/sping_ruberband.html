@@ -2,28 +2,48 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>彈性力學綜合模擬實驗 (彈簧 vs 橡皮筋)</title>
-    
-    <!-- 1. 載入 React 與 ReactDOM (鎖定 18.2.0 版本) -->
+
+    <!-- 1. React 18.2.0 -->
     <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    
-    <!-- 2. 載入 PropTypes -->
+    <!-- 2. PropTypes -->
     <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-
-    <!-- 3. 載入 Recharts -->
+    <!-- 3. Recharts -->
     <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
-    
-    <!-- 4. 載入 Babel -->
+    <!-- 4. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- 5. 載入 Tailwind CSS -->
+    <!-- 5. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <style>
-        body { overflow-x: hidden; background-color: #f8fafc; }
+        /* ====== 全域：1 頁式 + 觸控優化 ====== */
+        html, body, #root {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;            /* 主體不滾動 */
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; }
+        button, [role="button"] { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
         .recharts-wrapper { font-family: sans-serif; }
+        /* 數據表單一可捲動區 */
+        .scroll-area { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+        /* 自適應字級（避免平板被切掉） */
+        :root { --fs-h1: clamp(15px, 1.8vw, 20px); --fs-base: clamp(11px, 1.1vw, 14px); }
+
+        /* tab 切換用 display，避免 unmount 導致 state 流失 */
+        .tab-hidden { display: none !important; }
+        .tab-shown  { display: block; }
+
+        /* 確保 button 至少 44px hit area（觸控） */
+        @media (pointer: coarse) {
+            .btn-tap { min-height: 44px; }
+        }
     </style>
 </head>
 <body>
@@ -32,9 +52,12 @@
 
     <script type="text/babel">
         // ==========================================
-        // 1. Interaction Logger (數據追蹤工具)
+        // 1. Interaction Logger（仍寫入 localStorage 供分析使用）
+        //    注意：模擬器 React state 不再持久化，
+        //    切 tab 透過 display 切換保留 state；重新整理頁面則自然重置（符合需求）。
         // ==========================================
         const STORAGE_KEY = "TaskInteractionData";
+
         let interactionHistory = [];
 
         const InteractionLogger = {
@@ -43,9 +66,7 @@
                 if (stored) {
                     try {
                         const parsed = JSON.parse(stored);
-                        if (Array.isArray(parsed)) {
-                            interactionHistory = parsed;
-                        }
+                        if (Array.isArray(parsed)) interactionHistory = parsed;
                     } catch (e) {
                         console.warn("Failed to parse existing interaction data", e);
                         interactionHistory = [];
@@ -53,39 +74,29 @@
                 }
                 this.log('Initialize', { timestamp: new Date().toISOString(), sim: simName });
             },
-
             log: function(action, details = {}) {
-                const event = {
-                    timestamp: new Date().toISOString(),
-                    action: action,
-                    details: details
-                };
+                const event = { timestamp: new Date().toISOString(), action, details };
                 interactionHistory.push(event);
-                if (interactionHistory.length > 500) {
-                    interactionHistory.shift();
-                }
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory));
-                // Console 顯示追蹤狀況 (可選)
-                // console.log(`[Logged] ${action}:`, details);
+                if (interactionHistory.length > 500) interactionHistory.shift();
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(interactionHistory)); } catch (e) {}
             },
-
             clear: function() {
                 interactionHistory = [];
-                localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify([])); } catch (e) {}
             }
         };
 
         // ==========================================
         // 2. React 應用程式共用組件與環境
         // ==========================================
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
         const RechartsObj = window.Recharts || {};
-        const { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceArea } = RechartsObj;
+        const { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip } = RechartsObj;
 
         if (!window.Recharts) { console.error("Recharts Load Failed"); }
 
         // --- Icons ---
-        const Icon = ({ name, size = 20, className = "" }) => {
+        const Icon = ({ name, size = 18, className = "" }) => {
             const icons = {
                 alertCircle: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
                 alertTriangle: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
@@ -98,39 +109,46 @@
                 x: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
                 minus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>,
                 gitFork: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><line x1="12" y1="12" x2="12" y2="15"/></svg>,
-                beaker: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 3h15"/><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"/><path d="M6 14h12"/></svg>
+                beaker: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 3h15"/><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"/><path d="M6 14h12"/></svg>,
+                refresh: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             };
             return <span className={className}>{icons[name] || null}</span>;
         };
 
         // ==========================================
-        // 3. 第一部分：理想彈簧模擬器
+        // 3. 第一部分：理想彈簧模擬器（含 state 持久化）
         // ==========================================
         const SpringExperiment = () => {
-            const L0 = 8.0; 
-            const PAN_MASS = 100; 
+            const L0 = 8.0;
+            const PAN_MASS = 100;
             const MAX_TOTAL_MASS = 1000;
-            const SPRING_K = 24.5; 
+            const SPRING_K = 24.5;
 
-            const [mode, setMode] = useState('single'); 
+            // ----- React state 不持久化：切 tab 由 display 保留，重新整理會自然重置 -----
+            const [mode, setMode] = useState('single');
             const [isPanAttached, setIsPanAttached] = useState(false);
             const [addedMass, setAddedMass] = useState(0);
             const [currentExtension, setCurrentExtension] = useState(0);
             const [history, setHistory] = useState([]);
             const [isMaxedOut, setIsMaxedOut] = useState(false);
             const [trendline, setTrendline] = useState(null);
-
-            // 全域實驗次數追蹤
             const [totalRecordCount, setTotalRecordCount] = useState(0);
-            const isExperimentLocked = totalRecordCount >= 10; // 達到 10 次就鎖定實驗
 
+            const isExperimentLocked = totalRecordCount >= 10;
             const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
 
             const totalMass = isPanAttached ? (PAN_MASS + addedMass) : 0;
-            const currentLength = L0 + currentExtension; 
+            const currentLength = L0 + currentExtension;
 
             const currentModeCount = history.filter(d => d.mode === mode).length;
             const isModeLimitReached = currentModeCount >= 10;
+
+            // 一次性記錄：實驗達 10 次上限的瞬間（控制台鎖定時刻）
+            useEffect(() => {
+                if (totalRecordCount === 10) {
+                    InteractionLogger.log('ExperimentLocked_Spring', { totalRecordCount });
+                }
+            }, [totalRecordCount]);
 
             useEffect(() => {
                 if (totalMass <= 0) {
@@ -138,21 +156,18 @@
                     setIsMaxedOut(false);
                     return;
                 }
-
                 const gravity = 9.8;
                 const totalForce = (totalMass / 1000) * gravity;
                 let resultExt = 0;
                 const noise = (Math.random() - 0.5) * 0.05;
-
-                if (mode === 'single') resultExt = (totalForce / SPRING_K) * 100;
+                if (mode === 'single')   resultExt = (totalForce / SPRING_K) * 100;
                 else if (mode === 'parallel') resultExt = (totalForce / (SPRING_K * 2)) * 100;
-
                 const finalExt = Math.max(0, resultExt + noise);
-                setIsMaxedOut(finalExt > 50); // 用於圖形繪製變紅
+                setIsMaxedOut(finalExt > 50);
                 setCurrentExtension(finalExt);
             }, [totalMass, mode]);
 
-            const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
+            const showAlert   = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
             const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
             const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
             const handleConfirm = () => { if (dialog.onConfirm) dialog.onConfirm(); closeDialog(); };
@@ -160,43 +175,30 @@
             const calculateTrendline = () => {
                 const activeData = history.filter(d => d.mode === mode);
                 if (activeData.length < 2) {
+                    InteractionLogger.log('TrendlineInsufficient_Spring', { mode, currentCount: activeData.length });
                     showAlert("數據不足", `請在「${getModeLabel(mode)}」模式下至少記錄兩個數據點以進行分析。`);
                     return;
                 }
                 const n = activeData.length;
-                let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-                
+                let sumX=0,sumY=0,sumXY=0,sumX2=0;
                 activeData.forEach(pt => {
-                    const x = pt.totalLength; 
-                    const y = pt.mass;        
-                    sumX += x;
-                    sumY += y;
-                    sumXY += x * y;
-                    sumX2 += x * x;
+                    const x = pt.totalLength, y = pt.mass;
+                    sumX += x; sumY += y; sumXY += x*y; sumX2 += x*x;
                 });
-                
-                const denominator = (n * sumX2 - sumX * sumX);
-                if (Math.abs(denominator) < 0.0001) return;
-                
-                const slope = (n * sumXY - sumX * sumY) / denominator;
-                const intercept = (sumY - slope * sumX) / n;
-                
+                const denom = n*sumX2 - sumX*sumX;
+                if (Math.abs(denom) < 0.0001) return;
+                const slope = (n*sumXY - sumX*sumY) / denom;
+                const intercept = (sumY - slope*sumX) / n;
                 const minLength = Math.min(...activeData.map(d => d.totalLength));
                 const maxLength = Math.max(...activeData.map(d => d.totalLength));
-                
-                const x1 = Math.max(0, minLength * 0.9);
-                const y1 = slope * x1 + intercept;
-                const x2 = maxLength * 1.15;
-                const y2 = slope * x2 + intercept;
-
+                const x1 = Math.max(0, minLength*0.9), y1 = slope*x1 + intercept;
+                const x2 = maxLength*1.15,             y2 = slope*x2 + intercept;
                 const trendPoints = [
                     { totalLength: Number(x1.toFixed(2)), mass: Number(y1.toFixed(2)) },
                     { totalLength: Number(x2.toFixed(2)), mass: Number(y2.toFixed(2)) }
                 ];
-                
-                InteractionLogger.log('CalculateTrendline_Spring', { mode: mode, slope: slope.toFixed(2) });
-
-                setTrendline({ slope: slope.toFixed(2), points: trendPoints, mode: mode });
+                InteractionLogger.log('CalculateTrendline_Spring', { mode, slope: slope.toFixed(2) });
+                setTrendline({ slope: slope.toFixed(2), points: trendPoints, mode });
             };
 
             const clearData = () => {
@@ -208,38 +210,36 @@
             };
 
             const addWeight = (amount) => {
-                if (isExperimentLocked) return; 
+                if (isExperimentLocked) {
+                    InteractionLogger.log('AttemptedWhileLocked_Spring', { action: 'addWeight', amount });
+                    return;
+                }
                 if (totalMass + amount > MAX_TOTAL_MASS) {
                     showAlert("超重警告", `為了器材安全，本實驗總承重限制為 ${MAX_TOTAL_MASS}g。`);
                     InteractionLogger.log('WeightLimitExceeded_Spring', { attemptedMass: totalMass + amount });
                     return;
                 }
                 setAddedMass(prev => prev + amount);
-                InteractionLogger.log('AddWeight_Spring', { amount: amount, newTotalMass: totalMass + amount });
+                InteractionLogger.log('AddWeight_Spring', { amount, newTotalMass: totalMass + amount });
             };
 
             const recordData = () => {
-                if (isExperimentLocked) return; 
+                if (isExperimentLocked) {
+                    InteractionLogger.log('AttemptedWhileLocked_Spring', { action: 'recordData', mode });
+                    return;
+                }
                 if (isModeLimitReached) {
                     showAlert("模式次數上限", `「${getModeLabel(mode)}」已達 10 次記錄上限，請切換模式或清除數據再試。`);
                     return;
                 }
-                
                 const exists = history.some(d => d.mass === totalMass && d.mode === mode);
                 if (!exists) {
                     const newExt = parseFloat(currentExtension.toFixed(2));
                     const newLength = parseFloat(currentLength.toFixed(2));
-                    
-                    setHistory(prev => [...prev, {
-                        mode: mode,
-                        mass: totalMass,
-                        extension: newExt,
-                        totalLength: newLength
-                    }].sort((a, b) => a.mass - b.mass));
-                    
-                    setTotalRecordCount(prev => prev + 1); // 增加全域紀錄
-
-                    InteractionLogger.log('RecordDataPoint_Spring', { mode: mode, mass: totalMass, totalLength: newLength });
+                    setHistory(prev => [...prev, { mode, mass: totalMass, extension: newExt, totalLength: newLength }]
+                        .sort((a,b) => a.mass - b.mass));
+                    setTotalRecordCount(prev => prev + 1);
+                    InteractionLogger.log('RecordDataPoint_Spring', { mode, mass: totalMass, totalLength: newLength });
                 } else {
                     showAlert("重複記錄", "這個質量的數據已經記錄過囉！");
                 }
@@ -247,95 +247,82 @@
 
             const exportData = () => {
                 InteractionLogger.log('ExportDataCSV_Spring');
-                const csvContent = "data:text/csv;charset=utf-8,\uFEFF"
+                const csvContent = "data:text/csv;charset=utf-8,﻿"
                     + "模式,總質量 m (g),彈簧全長 L (cm)\n"
-                    + history.map(row => `${getModeLabel(row.mode)},${row.mass},${row.totalLength}`).join("\n");
-                const encodedUri = encodeURI(csvContent);
+                    + history.map(r => `${getModeLabel(r.mode)},${r.mass},${r.totalLength}`).join("\n");
                 const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
+                link.setAttribute("href", encodeURI(csvContent));
                 link.setAttribute("download", "彈簧實驗數據.csv");
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
-            const getModeLabel = (m) => {
-                switch (m) { case 'single': return '單一彈簧'; case 'parallel': return '並聯模式'; default: return m; }
-            };
-
-            const getModeColor = (m) => {
-                switch (m) { case 'single': return '#3b82f6'; case 'parallel': return '#10b981'; default: return '#64748b'; }
-            };
+            const getModeLabel = (m) => m === 'single' ? '單一彈簧' : (m === 'parallel' ? '並聯模式' : m);
+            const getModeColor = (m) => m === 'single' ? '#3b82f6' : (m === 'parallel' ? '#10b981' : '#64748b');
 
             const SpringSVG = ({ width, height, coils = 12, color = "#64748b", strokeWidth = 2 }) => {
-                const amp = width / 2 - 2; 
-                const stepY = height / coils;
-                let d = `M ${width/2} 0 L ${width/2} 10 `; 
+                let d = `M ${width/2} 0 L ${width/2} 10 `;
                 let currentY = 10;
-                const coilHeight = (height - 20) / coils; 
-                for(let i=0; i<coils; i++) {
-                   d += `L ${width - 2} ${currentY + coilHeight/4} `;
-                   d += `L ${2} ${currentY + 3*coilHeight/4} `;
-                   currentY += coilHeight;
+                const coilHeight = (height - 20) / coils;
+                for (let i = 0; i < coils; i++) {
+                    d += `L ${width-2} ${currentY + coilHeight/4} `;
+                    d += `L ${2}      ${currentY + 3*coilHeight/4} `;
+                    currentY += coilHeight;
                 }
                 d += `L ${width/2} ${currentY} L ${width/2} ${height} `;
                 return (
-                    <svg width={width} height={height} style={{overflow: 'visible'}}>
-                        <path d={d} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+                    <svg width={width} height={height} style={{overflow:'visible'}}>
+                        <path d={d} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                 );
             };
 
-            const PIXELS_PER_CM = 10; 
-            
+            const PIXELS_PER_CM = 8;
             const renderSprings = () => {
                 const color = isMaxedOut ? "#ef4444" : "#475569";
                 const strokeWidth = 2.5;
                 const coilCount = 15;
-                const springWidth = 30;
+                const springWidth = 28;
                 const totalVisualHeight = currentLength * PIXELS_PER_CM;
-                const singleSpringHeight = totalVisualHeight;
-
                 if (mode === 'single') {
                     return (
-                        <div className="flex justify-center transition-all duration-300 ease-out" style={{height: `${singleSpringHeight}px`}}>
-                            <SpringSVG width={springWidth} height={singleSpringHeight} coils={coilCount} color={color} strokeWidth={strokeWidth} />
+                        <div className="flex justify-center transition-all duration-300 ease-out" style={{height: `${totalVisualHeight}px`}}>
+                            <SpringSVG width={springWidth} height={totalVisualHeight} coils={coilCount} color={color} strokeWidth={strokeWidth} />
                         </div>
                     );
-                } else if (mode === 'parallel') {
+                } else {
                     return (
-                        <div className="flex justify-center gap-4 transition-all duration-300 ease-out" style={{height: `${singleSpringHeight}px`}}>
-                             <SpringSVG width={springWidth} height={singleSpringHeight} coils={coilCount} color={color} strokeWidth={strokeWidth} />
-                             <SpringSVG width={springWidth} height={singleSpringHeight} coils={coilCount} color={color} strokeWidth={strokeWidth} />
+                        <div className="flex justify-center gap-3 transition-all duration-300 ease-out" style={{height: `${totalVisualHeight}px`}}>
+                            <SpringSVG width={springWidth} height={totalVisualHeight} coils={coilCount} color={color} strokeWidth={strokeWidth} />
+                            <SpringSVG width={springWidth} height={totalVisualHeight} coils={coilCount} color={color} strokeWidth={strokeWidth} />
                         </div>
                     );
                 }
             };
 
-            const dataSingle = history.filter(d => d.mode === 'single');
+            const dataSingle   = history.filter(d => d.mode === 'single');
             const dataParallel = history.filter(d => d.mode === 'parallel');
 
             return (
-                <div className="font-sans text-slate-800 relative">
-                    {/* 彈窗 */}
+                <div className="font-sans text-slate-800 relative h-full flex flex-col">
+                    {/* ===== Dialog ===== */}
                     {dialog.isOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
                             <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 relative border border-slate-200">
-                                <button onClick={closeDialog} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><Icon name="x" /></button>
+                                <button onClick={closeDialog} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 btn-tap"><Icon name="x" size={22}/></button>
                                 <div className="flex flex-col items-center text-center">
-                                    <div className={`p-3 rounded-full mb-4 ${dialog.type === 'confirm' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                                        {dialog.type === 'confirm' ? <Icon name="alertTriangle" size={32} /> : <Icon name="alertCircle" size={32} />}
+                                    <div className={`p-3 rounded-full mb-3 ${dialog.type==='confirm' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                                        {dialog.type==='confirm' ? <Icon name="alertTriangle" size={28}/> : <Icon name="alertCircle" size={28}/>}
                                     </div>
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2">{dialog.title}</h3>
-                                    <p className="text-slate-600 mb-6">{dialog.message}</p>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-2">{dialog.title}</h3>
+                                    <p className="text-slate-600 mb-5 whitespace-pre-line text-sm">{dialog.message}</p>
                                     <div className="flex gap-3 w-full">
-                                        {dialog.type === 'confirm' ? (
+                                        {dialog.type==='confirm' ? (
                                             <>
-                                                <button onClick={closeDialog} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">取消</button>
-                                                <button onClick={handleConfirm} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">確定</button>
+                                                <button onClick={closeDialog}    className="btn-tap flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">取消</button>
+                                                <button onClick={handleConfirm}   className="btn-tap flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">確定</button>
                                             </>
                                         ) : (
-                                            <button onClick={closeDialog} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">知道了</button>
+                                            <button onClick={closeDialog} className="btn-tap flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">知道了</button>
                                         )}
                                     </div>
                                 </div>
@@ -343,296 +330,215 @@
                         </div>
                     )}
 
-                    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        
-                        {/* Header */}
-                        <div className="lg:col-span-12 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    {/* ===== 主版面：1 頁式自適應 ===== */}
+                    <div className="flex-1 min-h-0 grid gap-3 p-3 overflow-hidden"
+                         style={{
+                            gridTemplateColumns: 'minmax(320px, 5fr) minmax(360px, 7fr)',
+                            gridTemplateRows: 'auto 1fr'
+                         }}>
+
+                        {/* Header（橫跨全寬） */}
+                        <div className="col-span-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
                                     ⚙️ 理想彈簧虎克定律模擬
-                                    <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-mono border border-indigo-100">Linear Model</span>
+                                    <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-mono border border-indigo-100">Linear (F=kx)</span>
                                 </h1>
-                                <p className="text-slate-500 mt-1 text-sm">
-                                    驗證虎克定律 (F=kx) 與彈簧並聯組合
-                                </p>
                             </div>
-                            
-                            <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto max-w-full">
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
                                 {[
-                                    { id: 'single', iconName: 'minus', label: '單一' },
+                                    { id: 'single',   iconName: 'minus',   label: '單一' },
                                     { id: 'parallel', iconName: 'gitFork', label: '並聯' }
-                                ].map((m) => {
+                                ].map(m => {
                                     const isActive = mode === m.id;
                                     const rotateClass = m.id === 'parallel' ? 'rotate-180' : 'rotate-90';
                                     return (
-                                        <button
-                                            key={m.id}
-                                            onClick={() => { 
-                                                setMode(m.id); 
-                                                setTrendline(null); 
+                                        <button key={m.id}
+                                            onClick={() => {
+                                                setMode(m.id);
+                                                setTrendline(null);
                                                 setIsPanAttached(false);
                                                 setAddedMass(0);
                                                 InteractionLogger.log('ChangeMode_Spring', { mode: m.id });
                                             }}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
-                                                isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                            }`}
-                                        >
-                                            <Icon name={m.iconName} size={16} className={rotateClass} />
-                                            {m.label}
+                                            className={`btn-tap flex items-center gap-1 px-3 py-1.5 rounded-md text-xs md:text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
+                                            <Icon name={m.iconName} size={14} className={rotateClass}/> {m.label}
                                         </button>
-                                    )
+                                    );
                                 })}
                             </div>
-
-                            <div className="flex gap-4 text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
-                                <div className="flex flex-col items-center">
-                                    <span className="font-bold text-lg">{totalMass} g</span>
-                                    <span className="text-xs text-slate-400">總掛重</span>
-                                </div>
-                                <div className="w-px bg-slate-200 mx-2"></div>
-                                <div className="flex flex-col items-center">
-                                    <span className={`font-bold text-lg ${isMaxedOut ? 'text-red-600' : 'text-blue-600'}`}>
-                                        {currentLength.toFixed(1)} cm
-                                    </span>
-                                    <span className="text-xs text-slate-400">全長</span>
-                                </div>
+                            <div className="flex gap-3 text-xs md:text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                <div className="flex flex-col items-center"><span className="font-bold text-base">{totalMass} g</span><span className="text-[10px] text-slate-400">總掛重</span></div>
+                                <div className="w-px bg-slate-200"></div>
+                                <div className="flex flex-col items-center"><span className={`font-bold text-base ${isMaxedOut ? 'text-red-600' : 'text-blue-600'}`}>{currentLength.toFixed(1)} cm</span><span className="text-[10px] text-slate-400">全長</span></div>
                             </div>
                         </div>
 
                         {/* 左側：實驗操作區 */}
-                        <div className="lg:col-span-5 flex flex-col gap-4">
-                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-[600px] relative overflow-hidden flex justify-center bg-grid-slate-100">
-                                <div className="absolute inset-0 pointer-events-none opacity-50" 
-                                    style={{backgroundImage: 'linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex justify-center bg-grid-slate-100" style={{flex: '3 1 0', minHeight: 0}}>
+                                <div className="absolute inset-0 pointer-events-none opacity-50"
+                                     style={{backgroundImage:'linear-gradient(#cbd5e1 1px,transparent 1px),linear-gradient(90deg,#cbd5e1 1px,transparent 1px)', backgroundSize:'20px 20px'}}></div>
+                                <div className="absolute top-0 w-40 h-3 bg-slate-700 rounded-b-lg shadow-md z-10"></div>
 
-                                <div className="absolute top-0 w-48 h-4 bg-slate-700 rounded-b-lg shadow-md z-10"></div>
-                                
                                 {/* 尺規 */}
-                                <div className="absolute left-4 top-4 bottom-4 w-12 border-r-2 border-slate-400 flex flex-col items-end py-2 pr-1 text-xs text-slate-400 font-mono">
-                                    {[...Array(20)].map((_, i) => (
-                                        <div key={i} className="h-[30px] w-full border-b border-slate-200 flex items-end justify-end relative">
-                                            <span className="absolute right-2 bottom-[-8px]">{i*3}</span>
+                                <div className="absolute left-3 top-3 bottom-3 w-10 border-r-2 border-slate-400 flex flex-col items-end py-1 pr-1 text-[10px] text-slate-400 font-mono">
+                                    {[...Array(15)].map((_, i) => (
+                                        <div key={i} className="flex-1 w-full border-b border-slate-200 flex items-end justify-end relative">
+                                            <span className="absolute right-2 bottom-[-6px]">{i*4}</span>
                                             <div className="w-2 h-px bg-slate-400"></div>
                                         </div>
                                     ))}
-                                    <div className="absolute top-0 right-8 rotate-90 origin-right whitespace-nowrap text-slate-400">cm</div>
                                 </div>
 
-                                <div className="relative top-4 flex flex-col items-center transition-all duration-300 ease-out" style={{ width: '140px' }}>
+                                <div className="relative top-3 flex flex-col items-center transition-all duration-300 ease-out" style={{ width: '120px' }}>
                                     {renderSprings()}
                                     <div className="w-full flex justify-center -mt-1">
                                         <div className="w-1 h-3 bg-gray-500 rounded-b-sm"></div>
                                     </div>
                                     {isPanAttached ? (
-                                        <div className="w-32 h-2 bg-gray-600 rounded mb-1 shadow-lg relative flex justify-center items-end animate-in fade-in slide-in-from-top-4 duration-500">
+                                        <div className="w-28 h-2 bg-gray-600 rounded mb-1 shadow-lg relative flex justify-center items-end">
                                             <div className="absolute bottom-2 flex flex-col-reverse items-center gap-px">
                                                 <div className="w-20 h-4 bg-gray-500 rounded-sm border border-gray-600 flex items-center justify-center text-[10px] text-white opacity-80">秤盤 100g</div>
                                                 {addedMass > 0 && (
-                                                    <div className="w-16 h-auto max-h-[120px] bg-amber-600 rounded-sm border border-amber-700 flex items-center justify-center text-[10px] text-white shadow-sm px-2 py-1">
+                                                    <div className="w-16 max-h-[100px] bg-amber-600 rounded-sm border border-amber-700 flex items-center justify-center text-[10px] text-white shadow-sm px-2 py-0.5">
                                                         +{addedMass}g
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="text-xs text-slate-400 mt-2 font-mono bg-slate-100 px-2 py-1 rounded">
-                                            秤盤已取下
-                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-1 font-mono bg-slate-100 px-2 py-0.5 rounded">秤盤已取下</div>
                                     )}
                                 </div>
 
                                 {isMaxedOut && (
-                                    <div className="absolute top-20 right-10 bg-red-100 text-red-700 px-3 py-2 rounded-lg border border-red-200 shadow-sm flex items-center gap-2 animate-bounce">
-                                        <Icon name="alertCircle" size={16} />
-                                        <span className="text-xs font-bold">已達顯示極限</span>
+                                    <div className="absolute top-12 right-4 bg-red-100 text-red-700 px-2 py-1 rounded-lg border border-red-200 shadow-sm flex items-center gap-1">
+                                        <Icon name="alertCircle" size={12}/> <span className="text-[10px] font-bold">已達顯示極限</span>
                                     </div>
                                 )}
-                                
-                                <div className="absolute bottom-4 right-4 text-4xl font-black text-slate-200 select-none pointer-events-none uppercase tracking-widest">
-                                    {mode}
-                                </div>
                             </div>
 
                             {/* 控制面板 */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative">
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative" style={{flex: '0 0 auto'}}>
                                 {isExperimentLocked && (
-                                    <div className="absolute -top-3 right-6 bg-red-500 text-white text-xs px-3 py-1 rounded-full shadow-md font-bold animate-pulse">
-                                        已達 10 次實驗次數上限，控制台鎖定
-                                    </div>
+                                    <div className="absolute -top-2 right-4 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold animate-pulse">已達 10 次上限</div>
                                 )}
-                                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    <Icon name="plus" size={18} className="text-blue-500"/> 控制台
-                                    <span className={`ml-auto text-xs font-bold ${isExperimentLocked ? 'text-red-500' : 'text-slate-500'}`}>
-                                        已記錄: {totalRecordCount}/10 次
-                                    </span>
+                                <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
+                                    <Icon name="plus" size={16} className="text-blue-500"/> 控制台
+                                    <span className={`ml-auto text-[10px] font-bold ${isExperimentLocked ? 'text-red-500':'text-slate-500'}`}>已記錄: {totalRecordCount}/10</span>
                                 </h3>
-                                
-                                <div className="flex gap-2 mb-4">
-                                    <button 
-                                        onClick={() => {
+                                <div className="flex gap-2 mb-2">
+                                    <button onClick={() => {
                                             const newState = !isPanAttached;
                                             setIsPanAttached(newState);
                                             InteractionLogger.log('TogglePan_Spring', { isAttached: newState });
                                         }}
                                         disabled={isExperimentLocked}
-                                        className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isPanAttached ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'}`}
-                                    >
-                                        <Icon name="anchor" size={18} />
-                                        {isPanAttached ? '取下秤盤' : '掛上秤盤 (100g)'}
+                                        className={`btn-tap flex-1 py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${isPanAttached ? 'bg-amber-100 text-amber-800 active:bg-amber-200':'bg-emerald-100 text-emerald-800 active:bg-emerald-200'}`}>
+                                        <Icon name="anchor" size={16}/> {isPanAttached ? '取下秤盤':'掛上秤盤 (100g)'}
                                     </button>
                                 </div>
-
-                                <div className="grid grid-cols-4 gap-2 mb-4">
-                                    {[1, 5, 10, 50].map((w) => (
-                                        <button
-                                            key={w}
-                                            onClick={() => addWeight(w)}
-                                            disabled={!isPanAttached || totalMass + w > MAX_TOTAL_MASS || isExperimentLocked}
-                                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-3 rounded-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex flex-col items-center justify-center"
-                                        >
-                                            <span className="text-lg">+{w}</span>
-                                            <span className="text-xs font-normal">克</span>
+                                <div className="grid grid-cols-4 gap-2 mb-2">
+                                    {[1,5,10,50].map(w => (
+                                        <button key={w} onClick={() => addWeight(w)}
+                                            disabled={!isPanAttached || totalMass+w > MAX_TOTAL_MASS || isExperimentLocked}
+                                            className="btn-tap bg-blue-50 active:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex flex-col items-center justify-center">
+                                            <span className="text-base">+{w}</span><span className="text-[10px] font-normal">克</span>
                                         </button>
                                     ))}
                                 </div>
-
                                 <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => {
-                                            setAddedMass(0);
-                                            InteractionLogger.log('ClearWeight_Spring');
-                                        }}
+                                    <button onClick={() => { setAddedMass(0); InteractionLogger.log('ClearWeight_Spring'); }}
                                         disabled={(!isPanAttached || addedMass === 0) || isExperimentLocked}
-                                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
+                                        className="btn-tap flex-1 bg-slate-100 active:bg-slate-200 text-slate-600 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                                         清空砝碼
                                     </button>
-                                    <button 
-                                        onClick={recordData}
+                                    <button onClick={recordData}
                                         disabled={isExperimentLocked || isModeLimitReached}
-                                        className={`flex-[2] py-2 rounded-lg text-sm font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 ${(isExperimentLocked || isModeLimitReached) ? 'bg-slate-400 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 active:scale-95'}`}
-                                    >
-                                        {isExperimentLocked ? '已達 10 次上限' : (isModeLimitReached ? '模式已達10次上限' : '記錄目前數據點')}
+                                        className={`btn-tap flex-[2] py-2 rounded-lg text-xs font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${(isExperimentLocked || isModeLimitReached) ? 'bg-slate-400 text-white' : 'bg-indigo-600 active:bg-indigo-700 text-white'}`}>
+                                        {isExperimentLocked ? '已達 10 次上限' : (isModeLimitReached ? '此模式已 10 次' : '記錄目前數據點')}
                                     </button>
                                 </div>
                             </div>
                         </div>
 
                         {/* 右側：數據分析區 */}
-                        <div className="lg:col-span-7 flex flex-col gap-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex-1 min-h-[400px]">
-                                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                                    <h3 className="font-bold text-slate-800">📊 實驗數據比較圖 (質量 vs 全長)</h3>
-                                    <div className="flex gap-2 text-xs">
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex: '3 1 0', minHeight: 0}}>
+                                <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                                    <h3 className="font-bold text-slate-800 text-sm">📊 質量 vs 全長</h3>
+                                    <div className="flex gap-2 text-[10px]">
                                         <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>單一</div>
                                         <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>並聯</div>
                                     </div>
                                 </div>
-                                
-                                <div className="h-[350px] w-full relative">
+                                <div className="flex-1 w-full relative min-h-0">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                            <XAxis 
-                                                type="number" 
-                                                dataKey="totalLength" 
-                                                name="全長" 
-                                                unit="cm" 
-                                                domain={[0, 'auto']} 
-                                                label={{ value: '彈簧全長 L (cm)', position: 'insideBottomRight', offset: -10 }}
-                                            />
-                                            <YAxis 
-                                                type="number" 
-                                                dataKey="mass" 
-                                                name="重量" 
-                                                unit="g" 
-                                                domain={[0, 1000]} 
-                                                ticks={[0, 200, 400, 600, 800, 1000]}
-                                                label={{ value: '總質量 m (g)', angle: -90, position: 'insideLeft' }}
-                                            />
-                                            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                                            
-                                            <Scatter name="單一彈簧" data={dataSingle} fill={getModeColor('single')} shape="circle" />
-                                            <Scatter name="並聯模式" data={dataParallel} fill={getModeColor('parallel')} shape="square" />
-
+                                        <ScatterChart margin={{ top: 10, right: 15, bottom: 15, left: 10 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                                            <XAxis type="number" dataKey="totalLength" name="全長" unit="cm" domain={[0,'auto']}
+                                                label={{ value:'彈簧全長 L (cm)', position:'insideBottomRight', offset:-8, style:{fontSize:11} }}/>
+                                            <YAxis type="number" dataKey="mass" name="重量" unit="g" domain={[0,1000]}
+                                                ticks={[0,200,400,600,800,1000]}
+                                                label={{ value:'總質量 m (g)', angle:-90, position:'insideLeft', style:{fontSize:11} }}/>
+                                            <Tooltip cursor={{ strokeDasharray:'3 3' }}/>
+                                            <Scatter name="單一彈簧" data={dataSingle}   fill={getModeColor('single')}   shape="circle"/>
+                                            <Scatter name="並聯模式" data={dataParallel} fill={getModeColor('parallel')} shape="square"/>
                                             {trendline && (
-                                                <Scatter 
-                                                    name="趨勢線" 
-                                                    data={trendline.points} 
-                                                    line={{ stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '5 5' }} 
-                                                    shape={() => null} 
-                                                />
+                                                <Scatter name="趨勢線" data={trendline.points}
+                                                    line={{ stroke:'#ef4444', strokeWidth:2, strokeDasharray:'5 5' }}
+                                                    shape={() => null}/>
                                             )}
                                         </ScatterChart>
                                     </ResponsiveContainer>
-                                    
                                     {trendline && (
-                                        <div className="absolute top-2 left-16 bg-white/95 backdrop-blur border p-3 rounded-lg shadow-sm text-sm z-10" style={{ borderColor: getModeColor(trendline.mode) }}>
-                                            <div className="font-bold mb-1 flex items-center gap-1" style={{ color: getModeColor(trendline.mode) }}>
-                                                <Icon name="trendingUp" size={14}/> {getModeLabel(trendline.mode)} 趨勢分析
+                                        <div className="absolute top-1 left-12 bg-white/95 backdrop-blur border p-2 rounded-lg shadow-sm text-xs z-10" style={{ borderColor: getModeColor(trendline.mode) }}>
+                                            <div className="font-bold flex items-center gap-1" style={{ color: getModeColor(trendline.mode) }}>
+                                                <Icon name="trendingUp" size={12}/> {getModeLabel(trendline.mode)}
                                             </div>
-                                            <div className="font-bold text-slate-800">線性斜率: {trendline.slope} g/cm</div>
+                                            <div className="font-bold text-slate-800 text-[11px]">斜率: {trendline.slope} g/cm</div>
                                         </div>
                                     )}
                                 </div>
                             </div>
 
                             {/* 數據表格 */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex-1">
-                                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                                    <h3 className="font-bold text-slate-800">📝 數據記錄表</h3>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={calculateTrendline}
-                                            disabled={history.filter(d => d.mode === mode).length < 2}
-                                            className="px-3 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                            title={`分析「${getModeLabel(mode)}」的趨勢線`}
-                                        >
-                                            <Icon name="calculator" size={16} />
-                                            分析目前模式
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex: '2 1 0', minHeight: 0}}>
+                                <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                                    <h3 className="font-bold text-slate-800 text-sm">📝 數據記錄表</h3>
+                                    <div className="flex gap-1">
+                                        <button onClick={calculateTrendline} disabled={history.filter(d => d.mode === mode).length < 2}
+                                            className="btn-tap px-2 py-1 text-indigo-600 bg-indigo-50 active:bg-indigo-100 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed">
+                                            <Icon name="calculator" size={14}/> 分析模式
                                         </button>
-                                        <div className="w-px bg-slate-200 mx-1"></div>
-                                        <button onClick={exportData} disabled={history.length === 0} className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-30">
-                                            <Icon name="download" size={18} />
+                                        <button onClick={exportData} disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-blue-600 active:bg-blue-50 rounded disabled:opacity-30">
+                                            <Icon name="download" size={16}/>
                                         </button>
-                                        <button onClick={clearData} disabled={history.length === 0} className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-30">
-                                            <Icon name="trash2" size={18} />
+                                        <button onClick={clearData} disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-red-600 active:bg-red-50 rounded disabled:opacity-30">
+                                            <Icon name="trash2" size={16}/>
                                         </button>
                                     </div>
                                 </div>
-
-                                <div className="overflow-x-auto max-h-[250px] overflow-y-auto border rounded-lg">
-                                    <table className="w-full text-sm text-left text-slate-600">
-                                        <thead className="text-xs text-slate-700 uppercase bg-slate-50 sticky top-0">
+                                <div className="scroll-area flex-1 border rounded-lg min-h-0">
+                                    <table className="w-full text-xs text-left text-slate-600">
+                                        <thead className="text-[11px] text-slate-700 uppercase bg-slate-50 sticky top-0">
                                             <tr>
-                                                <th className="px-4 py-3">模式</th>
-                                                <th className="px-4 py-3">總質量 m (g)</th>
-                                                <th className="px-4 py-3">彈簧全長 L (cm)</th>
+                                                <th className="px-3 py-2">模式</th>
+                                                <th className="px-3 py-2">總質量 (g)</th>
+                                                <th className="px-3 py-2">全長 (cm)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {history.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="3" className="px-6 py-8 text-center text-slate-400 italic">
-                                                        尚未記錄數據，請掛上砝碼或直接記錄原長...
-                                                    </td>
+                                                <tr><td colSpan="3" className="px-4 py-6 text-center text-slate-400 italic">尚未記錄數據...</td></tr>
+                                            ) : history.map((row, i) => (
+                                                <tr key={i} className="bg-white border-b active:bg-slate-50">
+                                                    <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white" style={{backgroundColor:getModeColor(row.mode)}}>{getModeLabel(row.mode)}</span></td>
+                                                    <td className="px-3 py-2 font-medium text-slate-900">{row.mass}</td>
+                                                    <td className="px-3 py-2">{row.totalLength}</td>
                                                 </tr>
-                                            ) : (
-                                                history.map((row, index) => {
-                                                    return (
-                                                        <tr key={index} className="bg-white border-b hover:bg-slate-50">
-                                                            <td className="px-4 py-3">
-                                                                <span className="px-2 py-1 rounded text-xs font-bold text-white" style={{ backgroundColor: getModeColor(row.mode) }}>
-                                                                    {getModeLabel(row.mode)}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-4 py-3 font-medium text-slate-900">{row.mass}</td>
-                                                            <td className="px-4 py-3">{row.totalLength}</td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )}
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -645,58 +551,65 @@
 
         // ==========================================
         // 4. 第二部分：橡皮筋模擬器
+        //    [理論說明] 本式採 Mooney-Rivlin × Gent 鎖鏈延伸極限因子的「混合構成式」
+        //    (亦稱 "Gent-Gent" 或 Pucci–Saccomandi 2002 修正式)。
+        //    - Mooney 部分 (K1 + K2/λ)(λ - 1/λ²)：對應 Marckmann & Verron (2006) 文獻 Eq.(16)+(21)
+        //      之單軸名義應力 P = 2(λ - 1/λ²)(C1 + C2/λ)，文獻中的 2C1, 2C2 已被吸收進 K1, K2。
+        //    - Gent 因子 Jm/(Jm - J1)：對應 Eq.(35) Gent 模型 ∂W/∂I1，描述大應變 strain-hardening。
+        //    - 兩者相乘並非 Marckmann 列出的單一模型，而是工程文獻常見的混合式，
+        //      用以同時擬合中應變的 Mooney 線性段與大應變翹尾。
+        //    [單位提醒] m_calc 在物理上是「無因次應力」，
+        //              真實上 m(g) = (1000·A0/g) · P；
+        //              此處 K1, K2 已隱含吸收了 (1000·A0/g) 的轉換係數，
+        //              使 m_calc 可直接與「克」對應，便於對應測驗題目區間。
         // ==========================================
         const RubberBandExperiment = () => {
-            const L0 = 6.0; 
+            const L0 = 6.0;
             const PAN_MASS = 100;
             const MAX_TOTAL_MASS = 1000;
 
-            const [isPanAttached, setIsPanAttached] = useState(false); 
+            // ----- React state 不持久化：切 tab 由 display 保留，重新整理會自然重置 -----
+            const [isPanAttached, setIsPanAttached] = useState(false);
             const [addedMass, setAddedMass] = useState(0);
             const [currentExtension, setCurrentExtension] = useState(0);
             const [history, setHistory] = useState([]);
-            
             const [totalRecordCount, setTotalRecordCount] = useState(0);
-            const isExperimentLocked = totalRecordCount >= 30; 
-
+            const isExperimentLocked = totalRecordCount >= 30;
             const [isLimitReached, setIsLimitReached] = useState(false);
             const [trendline, setTrendline] = useState(null);
             const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
 
             const totalMass = isPanAttached ? (PAN_MASS + addedMass) : 0;
-            const currentLength = L0 + currentExtension; 
+            const currentLength = L0 + currentExtension;
 
-            // 橡皮筋理論公式二元搜尋反算器
+            // 一次性記錄：實驗達 30 次上限的瞬間（控制台鎖定時刻）
+            useEffect(() => {
+                if (totalRecordCount === 30) {
+                    InteractionLogger.log('ExperimentLocked_Rubber', { totalRecordCount });
+                }
+            }, [totalRecordCount]);
+
+            // 二元搜尋反算 ext (見上方理論註解)
             const calculateExtensionFromMass = (targetMass) => {
                 if (targetMass <= 0) return 0;
-                
-                const K1 = 40;   
-                const K2 = 200;  
-                const Jm = 40;   
-                
-                let minExt = 0;
-                let maxExt = 35; 
-                let midExt = 0;
-
+                const K1 = 40;   // 已吸收 2·C1·(1000·A0/g) 的綜合擬合常數
+                const K2 = 200;  // 已吸收 2·C2·(1000·A0/g) 的綜合擬合常數
+                const Jm = 40;   // Gent 模型鎖鏈延伸極限參數 (對應 Im)
+                let minExt = 0, maxExt = 35, midExt = 0;
                 for (let i = 0; i < 50; i++) {
                     midExt = (minExt + maxExt) / 2;
-                    
-                    const lambda = (L0 + midExt) / L0;
-                    const J1 = (lambda * lambda) + (2 / lambda) - 3;
-                    
+                    const lambda = (L0 + midExt) / L0;             // 伸長比
+                    const J1 = (lambda*lambda) + (2/lambda) - 3;   // I1 - 3
                     let m_calc = 0;
                     if (J1 >= Jm) {
-                        m_calc = Infinity;
+                        m_calc = Infinity;                          // 達 Gent 極限 → 應力發散
                     } else {
-                        const mooneyRivlin = (K1 + K2 / lambda) * (lambda - (1 / (lambda * lambda)));
-                        const gentFactor = Jm / (Jm - J1);
+                        const mooneyRivlin = (K1 + K2/lambda) * (lambda - 1/(lambda*lambda));
+                        const gentFactor   = Jm / (Jm - J1);
                         m_calc = mooneyRivlin * gentFactor;
                     }
-                    
-                    if (m_calc < targetMass) minExt = midExt;
-                    else maxExt = midExt;
+                    if (m_calc < targetMass) minExt = midExt; else maxExt = midExt;
                 }
-                
                 return midExt;
             };
 
@@ -706,308 +619,275 @@
                     setIsLimitReached(false);
                     return;
                 }
-                
                 const noise = (Math.random() - 0.5) * 0.1;
                 const ext = calculateExtensionFromMass(totalMass);
-                
                 setCurrentExtension(Math.max(0, ext + noise));
                 setIsLimitReached(ext > 24);
             }, [totalMass]);
 
-            const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
+            const showAlert   = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
             const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
             const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
             const handleConfirm = () => { if (dialog.onConfirm) dialog.onConfirm(); closeDialog(); };
 
             const calculateTrendline = () => {
                 if (history.length < 2) {
-                    showAlert("數據不足", `請至少記錄兩個數據點以進行分析。`);
+                    InteractionLogger.log('TrendlineInsufficient_Rubber', { currentCount: history.length });
+                    showAlert("數據不足", "請至少記錄兩個數據點以進行分析。");
                     return;
                 }
                 const n = history.length;
-                let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-                history.forEach(pt => {
-                    const x = pt.totalLength; 
-                    const y = pt.mass;        
-                    sumX += x;
-                    sumY += y;
-                    sumXY += x * y;
-                    sumX2 += x * x;
-                });
-                
-                const denominator = (n * sumX2 - sumX * sumX);
-                if (Math.abs(denominator) < 0.0001) return;
-                
-                const slope = (n * sumXY - sumX * sumY) / denominator;
-                const intercept = (sumY - slope * sumX) / n;
-                
-                const minLength = Math.min(...history.map(d => d.totalLength));
-                const maxLength = Math.max(...history.map(d => d.totalLength));
-
-                const x1 = Math.max(0, minLength * 0.9);
-                const y1 = slope * x1 + intercept;
-                const x2 = maxLength * 1.15;
-                const y2 = slope * x2 + intercept;
-
-                const trendPoints = [
-                    { totalLength: Number(x1.toFixed(2)), mass: Number(y1.toFixed(2)) },
-                    { totalLength: Number(x2.toFixed(2)), mass: Number(y2.toFixed(2)) }
-                ];
-                
+                let sumX=0,sumY=0,sumXY=0,sumX2=0;
+                history.forEach(pt => { const x=pt.totalLength,y=pt.mass; sumX+=x;sumY+=y;sumXY+=x*y;sumX2+=x*x; });
+                const denom = n*sumX2 - sumX*sumX;
+                if (Math.abs(denom) < 0.0001) return;
+                const slope = (n*sumXY - sumX*sumY)/denom;
+                const intercept = (sumY - slope*sumX)/n;
+                const minLen = Math.min(...history.map(d=>d.totalLength));
+                const maxLen = Math.max(...history.map(d=>d.totalLength));
+                const x1 = Math.max(0, minLen*0.9), y1 = slope*x1 + intercept;
+                const x2 = maxLen*1.15,             y2 = slope*x2 + intercept;
                 InteractionLogger.log('CalculateTrendline_Rubber', { slope: slope.toFixed(2) });
-
                 setTrendline({
                     slope: slope.toFixed(2),
-                    points: trendPoints
+                    points: [
+                        { totalLength: Number(x1.toFixed(2)), mass: Number(y1.toFixed(2)) },
+                        { totalLength: Number(x2.toFixed(2)), mass: Number(y2.toFixed(2)) }
+                    ]
                 });
             };
 
-            const clearData = () => showConfirm("清除確認", "確定要清除目前的數據圖表嗎？\n(注意：全域的 30 次實驗上限不會因此歸零)", () => { 
-                setHistory([]); 
-                setTrendline(null); 
-                InteractionLogger.log('ClearDataHistory_Rubber'); 
-            });
-            
+            const clearData = () => showConfirm("清除確認", "確定要清除目前的數據圖表嗎？\n(注意：全域的 30 次實驗上限不會因此歸零)",
+                () => { setHistory([]); setTrendline(null); InteractionLogger.log('ClearDataHistory_Rubber'); });
+
             const addWeight = (amount) => {
-                if (isExperimentLocked) return;
-                if (totalMass + amount > MAX_TOTAL_MASS) { 
-                    showAlert("超重警告", `為了器材安全，本實驗總承重限制為 ${MAX_TOTAL_MASS}g。`); 
+                if (isExperimentLocked) {
+                    InteractionLogger.log('AttemptedWhileLocked_Rubber', { action: 'addWeight', amount });
+                    return;
+                }
+                if (totalMass + amount > MAX_TOTAL_MASS) {
+                    showAlert("超重警告", `為了器材安全，本實驗總承重限制為 ${MAX_TOTAL_MASS}g。`);
                     InteractionLogger.log('WeightLimitExceeded_Rubber', { attemptedMass: totalMass + amount });
-                    return; 
+                    return;
                 }
                 setAddedMass(prev => prev + amount);
-                InteractionLogger.log('AddWeight_Rubber', { amount: amount, newTotalMass: totalMass + amount });
+                InteractionLogger.log('AddWeight_Rubber', { amount, newTotalMass: totalMass + amount });
             };
-            
-            const recordData = () => {
-                if (isExperimentLocked) return; 
 
+            const recordData = () => {
+                if (isExperimentLocked) {
+                    InteractionLogger.log('AttemptedWhileLocked_Rubber', { action: 'recordData' });
+                    return;
+                }
                 const exists = history.some(d => d.mass === totalMass);
                 if (!exists) {
                     const newLength = parseFloat(currentLength.toFixed(2));
-                    setHistory(prev => [...prev, {
-                        mass: totalMass,
-                        totalLength: newLength
-                    }].sort((a, b) => a.mass - b.mass));
-                    
-                    setTotalRecordCount(prev => prev + 1); 
-
-                    InteractionLogger.log('RecordDataPoint_Rubber', { 
-                        mass: totalMass, 
-                        totalLength: newLength 
-                    });
+                    setHistory(prev => [...prev, { mass: totalMass, totalLength: newLength }].sort((a,b)=>a.mass-b.mass));
+                    setTotalRecordCount(prev => prev + 1);
+                    InteractionLogger.log('RecordDataPoint_Rubber', { mass: totalMass, totalLength: newLength });
                 } else {
                     showAlert("重複記錄", "這個質量的數據已經記錄過囉！");
                 }
             };
-            
+
             const exportData = () => {
                 InteractionLogger.log('ExportDataCSV_Rubber');
-                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "質量 m (g),橡皮筋全長 L (cm)\n" + 
-                history.map(row => {
-                    return `${row.mass},${row.totalLength}`;
-                }).join("\n");
-                
-                const encodedUri = encodeURI(csvContent);
+                const csvContent = "data:text/csv;charset=utf-8,﻿" + "質量 m (g),橡皮筋全長 L (cm)\n"
+                    + history.map(r => `${r.mass},${r.totalLength}`).join("\n");
                 const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
+                link.setAttribute("href", encodeURI(csvContent));
                 link.setAttribute("download", "橡皮筋非線性數據.csv");
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
-            const PIXELS_PER_CM = 12; 
+            const PIXELS_PER_CM = 9;
             const RUBBER_WIDTH_BASE = 8;
             const currentWidth = Math.max(2, RUBBER_WIDTH_BASE * (L0 / currentLength));
-            
-            const getRubberColor = () => {
-                if (currentExtension > 24) return "#ef4444"; 
-                if (currentExtension > 16) return "#eab308"; 
-                return "#22c55e"; 
-            };
+            const getRubberColor = () => currentExtension > 24 ? "#ef4444" : (currentExtension > 16 ? "#eab308" : "#22c55e");
 
             const renderRubberBands = () => {
                 const color = getRubberColor();
                 const totalVisualHeight = currentLength * PIXELS_PER_CM;
-                const styleBand = { 
-                    backgroundColor: color, 
-                    boxShadow: isLimitReached ? '0 0 10px rgba(239, 68, 68, 0.5)' : 'none', 
-                    border: '1px solid rgba(0,0,0,0.1)', 
-                    transition: 'all 0.5s ease-out' 
+                const styleBand = {
+                    backgroundColor: color,
+                    boxShadow: isLimitReached ? '0 0 10px rgba(239,68,68,0.5)' : 'none',
+                    border: '1px solid rgba(0,0,0,0.1)',
+                    transition: 'all 0.5s ease-out'
                 };
-
-                return <div style={{ ...styleBand, width: `${currentWidth}px`, height: `${totalVisualHeight}px` }} className="rounded-full" />;
+                return <div style={{ ...styleBand, width: `${currentWidth}px`, height: `${totalVisualHeight}px` }} className="rounded-full"/>;
             };
 
             return (
-                <div className="font-sans text-slate-800 relative">
+                <div className="font-sans text-slate-800 relative h-full flex flex-col">
                     {dialog.isOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
                             <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 relative border border-slate-200">
-                                <button onClick={closeDialog} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><Icon name="x" /></button>
+                                <button onClick={closeDialog} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 btn-tap"><Icon name="x" size={22}/></button>
                                 <div className="flex flex-col items-center text-center">
-                                    <div className={`p-3 rounded-full mb-4 ${dialog.type === 'confirm' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                                        {dialog.type === 'confirm' ? <Icon name="alertTriangle" size={32} /> : <Icon name="alertCircle" size={32} />}
+                                    <div className={`p-3 rounded-full mb-3 ${dialog.type==='confirm'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-600'}`}>
+                                        {dialog.type==='confirm' ? <Icon name="alertTriangle" size={28}/> : <Icon name="alertCircle" size={28}/>}
                                     </div>
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2">{dialog.title}</h3>
-                                    <p className="text-slate-600 mb-6">{dialog.message}</p>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-2">{dialog.title}</h3>
+                                    <p className="text-slate-600 mb-5 whitespace-pre-line text-sm">{dialog.message}</p>
                                     <div className="flex gap-3 w-full">
-                                        {dialog.type === 'confirm' ? (
+                                        {dialog.type==='confirm' ? (
                                             <>
-                                                <button onClick={closeDialog} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">取消</button>
-                                                <button onClick={handleConfirm} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">確定</button>
+                                                <button onClick={closeDialog}  className="btn-tap flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 active:bg-slate-50">取消</button>
+                                                <button onClick={handleConfirm} className="btn-tap flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold active:bg-red-700">確定</button>
                                             </>
                                         ) : (
-                                            <button onClick={closeDialog} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">知道了</button>
+                                            <button onClick={closeDialog} className="btn-tap flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold active:bg-blue-700">知道了</button>
                                         )}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
-                    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        <div className="lg:col-span-12 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+
+                    {/* ===== 主版面 ===== */}
+                    <div className="flex-1 min-h-0 grid gap-3 p-3 overflow-hidden"
+                         style={{
+                            gridTemplateColumns: 'minmax(320px, 5fr) minmax(360px, 7fr)',
+                            gridTemplateRows: 'auto 1fr'
+                         }}>
+
+                        {/* Header */}
+                        <div className="col-span-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
                                     🧪 橡皮筋彈力模擬實驗
-                                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full font-mono">Non-Linear Model</span>
+                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">Non-Linear (Mooney-Rivlin × Gent)</span>
                                 </h1>
-                                <p className="text-slate-500 mt-1 text-sm">探究高分子彈性體的非線性拉伸特性（S-Curve）</p>
                             </div>
-                            
-                            <div className="flex gap-4 text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
-                                <div className="flex flex-col items-center"><span className="font-bold text-lg">{totalMass} g</span><span className="text-xs text-slate-400">總質量</span></div>
-                                <div className="w-px bg-slate-200 mx-2"></div>
-                                <div className="flex flex-col items-center"><span className={`font-bold text-lg ${isLimitReached ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>{currentLength.toFixed(1)} cm</span><span className="text-xs text-slate-400">全長</span></div>
+                            <div className="flex gap-3 text-xs md:text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                <div className="flex flex-col items-center"><span className="font-bold text-base">{totalMass} g</span><span className="text-[10px] text-slate-400">總質量</span></div>
+                                <div className="w-px bg-slate-200"></div>
+                                <div className="flex flex-col items-center"><span className={`font-bold text-base ${isLimitReached?'text-red-600 animate-pulse':'text-blue-600'}`}>{currentLength.toFixed(1)} cm</span><span className="text-[10px] text-slate-400">全長</span></div>
                             </div>
                         </div>
-                        <div className="lg:col-span-5 flex flex-col gap-4">
-                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-[600px] relative overflow-hidden flex justify-center bg-grid-slate-100">
-                                <div className="absolute inset-0 pointer-events-none opacity-50" style={{ backgroundImage: 'linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-                                <div className="absolute top-0 w-48 h-4 bg-slate-700 rounded-b-lg shadow-md z-10"></div>
-                                <div className="absolute left-4 top-4 bottom-4 w-12 border-r-2 border-slate-400 flex flex-col items-end py-2 pr-1 text-xs text-slate-400 font-mono">
-                                    {[...Array(20)].map((_, i) => <div key={i} className="h-[24px] w-full border-b border-slate-200 flex items-end justify-end relative"><span className="absolute right-2 bottom-[-8px]">{i * 2}</span><div className="w-2 h-px bg-slate-400"></div></div>)}
-                                    <div className="absolute top-0 right-8 rotate-90 origin-right whitespace-nowrap text-slate-400">cm</div>
+
+                        {/* 左側 */}
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex justify-center bg-grid-slate-100" style={{flex:'3 1 0', minHeight:0}}>
+                                <div className="absolute inset-0 pointer-events-none opacity-50" style={{ backgroundImage:'linear-gradient(#cbd5e1 1px,transparent 1px),linear-gradient(90deg,#cbd5e1 1px,transparent 1px)', backgroundSize:'20px 20px' }}></div>
+                                <div className="absolute top-0 w-40 h-3 bg-slate-700 rounded-b-lg shadow-md z-10"></div>
+                                <div className="absolute left-3 top-3 bottom-3 w-10 border-r-2 border-slate-400 flex flex-col items-end py-1 pr-1 text-[10px] text-slate-400 font-mono">
+                                    {[...Array(15)].map((_,i)=>(
+                                        <div key={i} className="flex-1 w-full border-b border-slate-200 flex items-end justify-end relative">
+                                            <span className="absolute right-2 bottom-[-6px]">{i*2}</span>
+                                            <div className="w-2 h-px bg-slate-400"></div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="relative top-4 flex flex-col items-center transition-all duration-300 ease-out" style={{ width: '140px' }}>
+                                <div className="relative top-3 flex flex-col items-center transition-all duration-300 ease-out" style={{ width:'120px' }}>
                                     {renderRubberBands()}
-                                    <div className="w-full flex justify-center"><div className="w-1 h-4 bg-gray-400 rounded-b-sm"></div></div>
-                                    {isPanAttached ? <div className="w-32 h-2 bg-gray-600 rounded mb-1 shadow-lg relative flex justify-center items-end animate-in fade-in slide-in-from-top-4 duration-500"><div className="absolute bottom-2 flex flex-col-reverse items-center gap-px"><div className="w-20 h-4 bg-gray-500 rounded-sm border border-gray-600 flex items-center justify-center text-[10px] text-white opacity-80">秤盤 100g</div>{addedMass > 0 && <div className="w-16 h-auto max-h-[120px] bg-amber-600 rounded-sm border border-amber-700 flex items-center justify-center text-[10px] text-white shadow-sm px-2 py-1">+{addedMass}g</div>}</div></div> : <div className="text-xs text-slate-400 mt-2 font-mono bg-slate-100 px-2 py-1 rounded">秤盤已取下</div>}
+                                    <div className="w-full flex justify-center"><div className="w-1 h-3 bg-gray-400 rounded-b-sm"></div></div>
+                                    {isPanAttached ? (
+                                        <div className="w-28 h-2 bg-gray-600 rounded mb-1 shadow-lg relative flex justify-center items-end">
+                                            <div className="absolute bottom-2 flex flex-col-reverse items-center gap-px">
+                                                <div className="w-20 h-4 bg-gray-500 rounded-sm border border-gray-600 flex items-center justify-center text-[10px] text-white opacity-80">秤盤 100g</div>
+                                                {addedMass > 0 && <div className="w-16 max-h-[100px] bg-amber-600 rounded-sm border border-amber-700 flex items-center justify-center text-[10px] text-white shadow-sm px-2 py-0.5">+{addedMass}g</div>}
+                                            </div>
+                                        </div>
+                                    ) : <div className="text-[10px] text-slate-400 mt-1 font-mono bg-slate-100 px-2 py-0.5 rounded">秤盤已取下</div>}
                                 </div>
-                                {isLimitReached && <div className="absolute top-20 right-10 bg-red-100 text-red-700 px-3 py-2 rounded-lg border border-red-200 shadow-sm flex items-center gap-2 animate-bounce"><Icon name="alertCircle" size={16} /><span className="text-xs font-bold">接近材料極限！</span></div>}
+                                {isLimitReached && (
+                                    <div className="absolute top-12 right-4 bg-red-100 text-red-700 px-2 py-1 rounded-lg border border-red-200 shadow-sm flex items-center gap-1">
+                                        <Icon name="alertCircle" size={12}/><span className="text-[10px] font-bold">接近材料極限</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* 控制面板 */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative">
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative" style={{flex:'0 0 auto'}}>
                                 {isExperimentLocked && (
-                                    <div className="absolute -top-3 right-6 bg-red-500 text-white text-xs px-3 py-1 rounded-full shadow-md font-bold animate-pulse">
-                                        已達 30 次實驗次數上限，控制台鎖定
-                                    </div>
+                                    <div className="absolute -top-2 right-4 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold animate-pulse">已達 30 次上限</div>
                                 )}
-                                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    <Icon name="plus" size={18} className="text-blue-500" /> 控制台
-                                    <span className={`ml-auto text-xs font-bold ${isExperimentLocked ? 'text-red-500' : 'text-slate-500'}`}>
-                                        已記錄: {totalRecordCount}/30 次
-                                    </span>
+                                <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
+                                    <Icon name="plus" size={16} className="text-blue-500"/> 控制台
+                                    <span className={`ml-auto text-[10px] font-bold ${isExperimentLocked?'text-red-500':'text-slate-500'}`}>已記錄: {totalRecordCount}/30</span>
                                 </h3>
-                                <div className="flex gap-2 mb-4">
-                                    <button 
-                                        onClick={() => { const newState = !isPanAttached; setIsPanAttached(newState); InteractionLogger.log('TogglePan_Rubber', { isAttached: newState }); }} 
+                                <div className="flex gap-2 mb-2">
+                                    <button onClick={() => { const ns = !isPanAttached; setIsPanAttached(ns); InteractionLogger.log('TogglePan_Rubber', { isAttached: ns }); }}
                                         disabled={isExperimentLocked}
-                                        className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isPanAttached ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'}`}
-                                    >
-                                        <Icon name="anchor" size={18} />{isPanAttached ? '取下秤盤' : '掛上秤盤 (100g)'}
+                                        className={`btn-tap flex-1 py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${isPanAttached?'bg-amber-100 text-amber-800 active:bg-amber-200':'bg-emerald-100 text-emerald-800 active:bg-emerald-200'}`}>
+                                        <Icon name="anchor" size={16}/>{isPanAttached?'取下秤盤':'掛上秤盤 (100g)'}
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-4 gap-2 mb-4">
-                                    {[1, 5, 10, 50].map((w) => 
-                                        <button 
-                                            key={w} 
-                                            onClick={() => addWeight(w)} 
-                                            disabled={!isPanAttached || totalMass + w > MAX_TOTAL_MASS || isExperimentLocked} 
-                                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-3 rounded-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex flex-col items-center justify-center"
-                                        >
-                                            <span className="text-lg">+{w}</span><span className="text-xs font-normal">克</span>
+                                <div className="grid grid-cols-4 gap-2 mb-2">
+                                    {[1,5,10,50].map(w => (
+                                        <button key={w} onClick={() => addWeight(w)}
+                                            disabled={!isPanAttached || totalMass+w > MAX_TOTAL_MASS || isExperimentLocked}
+                                            className="btn-tap bg-blue-50 active:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex flex-col items-center justify-center">
+                                            <span className="text-base">+{w}</span><span className="text-[10px] font-normal">克</span>
                                         </button>
-                                    )}
+                                    ))}
                                 </div>
                                 <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => { setAddedMass(0); InteractionLogger.log('ClearWeight_Rubber'); }} 
-                                        disabled={!isPanAttached || addedMass === 0 || isExperimentLocked} 
-                                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
+                                    <button onClick={() => { setAddedMass(0); InteractionLogger.log('ClearWeight_Rubber'); }}
+                                        disabled={!isPanAttached || addedMass === 0 || isExperimentLocked}
+                                        className="btn-tap flex-1 bg-slate-100 active:bg-slate-200 text-slate-600 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                                         清空砝碼
                                     </button>
-                                    <button 
-                                        onClick={recordData} 
-                                        disabled={isExperimentLocked}
-                                        className={`flex-[2] py-2 rounded-lg text-sm font-bold shadow-sm transition-all disabled:scale-100 disabled:cursor-not-allowed ${isExperimentLocked ? 'bg-slate-300 text-slate-500 shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 active:scale-95'}`}
-                                    >
-                                        {isExperimentLocked ? '已達 30 次上限' : '記錄目前數據點'}
+                                    <button onClick={recordData} disabled={isExperimentLocked}
+                                        className={`btn-tap flex-[2] py-2 rounded-lg text-xs font-bold shadow-sm transition-all disabled:cursor-not-allowed ${isExperimentLocked?'bg-slate-300 text-slate-500':'bg-indigo-600 active:bg-indigo-700 text-white'}`}>
+                                        {isExperimentLocked?'已達 30 次上限':'記錄目前數據點'}
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="lg:col-span-7 flex flex-col gap-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex-1 min-h-[400px]">
-                                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                                    <h3 className="font-bold text-slate-800">📊 實驗數據圖 (質量 vs 全長)</h3>
+                        {/* 右側 */}
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex:'3 1 0', minHeight:0}}>
+                                <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                                    <h3 className="font-bold text-slate-800 text-sm">📊 質量 vs 全長</h3>
                                 </div>
-                                <div className="h-[350px] w-full relative">
+                                <div className="flex-1 w-full relative min-h-0">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                            <XAxis type="number" dataKey="totalLength" name="全長" unit="cm" domain={[0, 30]} label={{ value: '橡皮筋全長 L (cm)', position: 'insideBottomRight', offset: -10 }} />
-                                            <YAxis type="number" dataKey="mass" name="重量" unit="g" domain={[0, 1000]} ticks={[0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]} label={{ value: '總質量 m (g)', angle: -90, position: 'insideLeft' }} />
-                                            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                                            
-                                            <Scatter 
-                                                name="橡皮筋拉伸" 
-                                                data={history} 
-                                                shape={(props) => <circle cx={props.cx} cy={props.cy} r={3} fill="#4f46e5" />} 
-                                            />
-                                            
-                                            {trendline && <Scatter name="趨勢線" data={trendline.points} line={{ stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '5 5' }} shape={() => null} dataKey="mass" />}
+                                        <ScatterChart margin={{ top:10, right:15, bottom:15, left:10 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                                            <XAxis type="number" dataKey="totalLength" name="全長" unit="cm" domain={[0,30]} label={{ value:'橡皮筋全長 L (cm)', position:'insideBottomRight', offset:-8, style:{fontSize:11} }}/>
+                                            <YAxis type="number" dataKey="mass" name="重量" unit="g" domain={[0,1000]} ticks={[0,200,400,600,800,1000]} label={{ value:'總質量 m (g)', angle:-90, position:'insideLeft', style:{fontSize:11} }}/>
+                                            <Tooltip cursor={{ strokeDasharray:'3 3' }}/>
+                                            <Scatter name="橡皮筋拉伸" data={history} shape={(props) => <circle cx={props.cx} cy={props.cy} r={3} fill="#4f46e5"/>}/>
+                                            {trendline && <Scatter name="趨勢線" data={trendline.points} line={{ stroke:'#ef4444', strokeWidth:2, strokeDasharray:'5 5' }} shape={() => null} dataKey="mass"/>}
                                         </ScatterChart>
                                     </ResponsiveContainer>
-                                    
                                     {trendline && (
-                                        <div className="absolute top-2 left-16 bg-white/95 backdrop-blur border p-3 rounded-lg shadow-sm text-sm z-10 border-indigo-500">
-                                            <div className="font-bold mb-1 flex items-center gap-1 text-indigo-600"><Icon name="trendingUp" size={14} /> 趨勢分析</div>
-                                            <div className="font-bold text-slate-800">整體線性斜率: {trendline.slope} g/cm</div>
-                                            <div className="text-[10px] text-slate-500 mt-1 max-w-[150px]">註：橡皮筋在低質量與高質量區段<br/>具有強烈非線性，不貼合直線是正常的！</div>
+                                        <div className="absolute top-1 left-12 bg-white/95 backdrop-blur border p-2 rounded-lg shadow-sm text-xs z-10 border-indigo-500">
+                                            <div className="font-bold flex items-center gap-1 text-indigo-600"><Icon name="trendingUp" size={12}/> 趨勢分析</div>
+                                            <div className="font-bold text-slate-800 text-[11px]">斜率: {trendline.slope} g/cm</div>
+                                            <div className="text-[9px] text-slate-500 max-w-[140px] mt-0.5">註：橡皮筋具非線性，<br/>不貼合直線是正常的</div>
                                         </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex-1">
-                                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                                    <h3 className="font-bold text-slate-800">📝 數據記錄表</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={calculateTrendline} disabled={history.length < 2} className="px-3 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="分析趨勢線"><Icon name="calculator" size={16} /> 分析整體趨勢線</button>
-                                        <div className="w-px bg-slate-200 mx-1"></div>
-                                        <button onClick={exportData} disabled={history.length === 0} className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-30"><Icon name="download" size={18} /></button>
-                                        <button onClick={clearData} disabled={history.length === 0} className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-30"><Icon name="trash2" size={18} /></button>
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex:'2 1 0', minHeight:0}}>
+                                <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                                    <h3 className="font-bold text-slate-800 text-sm">📝 數據記錄表</h3>
+                                    <div className="flex gap-1">
+                                        <button onClick={calculateTrendline} disabled={history.length<2} className="btn-tap px-2 py-1 text-indigo-600 bg-indigo-50 active:bg-indigo-100 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"><Icon name="calculator" size={14}/>分析趨勢</button>
+                                        <button onClick={exportData} disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-blue-600 active:bg-blue-50 rounded disabled:opacity-30"><Icon name="download" size={16}/></button>
+                                        <button onClick={clearData}  disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-red-600  active:bg-red-50  rounded disabled:opacity-30"><Icon name="trash2" size={16}/></button>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto max-h-[250px] overflow-y-auto border rounded-lg">
-                                    <table className="w-full text-sm text-left text-slate-600">
-                                        <thead className="text-xs text-slate-700 uppercase bg-slate-50 sticky top-0">
+                                <div className="scroll-area flex-1 border rounded-lg min-h-0">
+                                    <table className="w-full text-xs text-left text-slate-600">
+                                        <thead className="text-[11px] text-slate-700 uppercase bg-slate-50 sticky top-0">
                                             <tr>
-                                                <th className="px-4 py-3">質量 m (g)</th>
-                                                <th className="px-4 py-3">橡皮筋全長 L (cm)</th>
+                                                <th className="px-3 py-2">質量 (g)</th>
+                                                <th className="px-3 py-2">全長 (cm)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {history.length === 0 ? <tr><td colSpan="2" className="px-6 py-8 text-center text-slate-400 italic">尚未記錄數據，可直接記錄原長或掛上砝碼...</td></tr> : history.map((row, index) => { 
-                                                return <tr key={index} className="bg-white border-b hover:bg-slate-50">
-                                                    <td className="px-4 py-3 font-medium text-slate-900">{row.mass}</td>
-                                                    <td className="px-4 py-3">{row.totalLength}</td>
-                                                </tr> 
-                                            })}
+                                            {history.length===0 ? <tr><td colSpan="2" className="px-4 py-6 text-center text-slate-400 italic">尚未記錄數據...</td></tr>
+                                            : history.map((row,i)=>(
+                                                <tr key={i} className="bg-white border-b active:bg-slate-50">
+                                                    <td className="px-3 py-2 font-medium text-slate-900">{row.mass}</td>
+                                                    <td className="px-3 py-2">{row.totalLength}</td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1019,9 +899,10 @@
         };
 
         // ==========================================
-        // 5. 綜合主程式 (管理分頁切換)
+        // 5. 綜合主程式（tab 用 display 切換，state 不會被卸載）
         // ==========================================
         const App = () => {
+            // 開啟頁面預設停在彈簧 tab；不持久化，重新整理會回到此預設並重置所有 state
             const [activeTab, setActiveTab] = useState('spring');
 
             useEffect(() => {
@@ -1034,42 +915,34 @@
             };
 
             return (
-                <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-                    {/* 頂部導覽列 */}
-                    <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
-                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center">
-                            <div className="text-lg font-black text-indigo-700 py-3 px-4 md:pr-8 md:border-r border-slate-100 flex items-center gap-2">
-                                <Icon name="beaker" size={24} /> 彈性力學綜合模擬
+                <div className="h-full flex flex-col bg-slate-50 font-sans text-slate-800">
+                    {/* ===== 頂部導覽列 ===== */}
+                    <div className="bg-white border-b border-slate-200 shadow-sm flex-shrink-0">
+                        <div className="flex flex-row items-stretch px-2">
+                            <div className="text-sm md:text-base font-black text-indigo-700 py-2 px-2 flex items-center gap-2 whitespace-nowrap">
+                                <Icon name="beaker" size={20}/> <span className="hidden sm:inline">彈性力學綜合模擬</span>
                             </div>
-                            <div className="flex overflow-x-auto w-full md:w-auto">
-                                <button
-                                    onClick={() => handleTabSwitch('spring')}
-                                    className={`flex-1 md:flex-none px-6 py-4 font-bold border-b-4 transition-colors whitespace-nowrap ${
-                                        activeTab === 'spring' 
-                                        ? 'border-blue-500 text-blue-600 bg-blue-50/50' 
-                                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    第一部分：理想彈簧 (Hooke's Law)
+                            <div className="flex-1 flex overflow-x-auto">
+                                <button onClick={() => handleTabSwitch('spring')}
+                                    className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='spring'?'border-blue-500 text-blue-600 bg-blue-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>
+                                    第一部分：理想彈簧 (Hooke)
                                 </button>
-                                <button
-                                    onClick={() => handleTabSwitch('rubber')}
-                                    className={`flex-1 md:flex-none px-6 py-4 font-bold border-b-4 transition-colors whitespace-nowrap ${
-                                        activeTab === 'rubber' 
-                                        ? 'border-emerald-500 text-emerald-600 bg-emerald-50/50' 
-                                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
+                                <button onClick={() => handleTabSwitch('rubber')}
+                                    className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='rubber'?'border-emerald-500 text-emerald-600 bg-emerald-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>
                                     第二部分：橡皮筋 (Non-Linear)
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* 內容區塊 */}
-                    <div className="p-4 md:p-6 animate-in fade-in duration-500">
-                        {activeTab === 'spring' && <SpringExperiment />}
-                        {activeTab === 'rubber' && <RubberBandExperiment />}
+                    {/* ===== 內容區（兩個 tab 都掛載，用 display 切換）===== */}
+                    <div className="flex-1 min-h-0 relative">
+                        <div className={`absolute inset-0 ${activeTab==='spring' ? 'tab-shown':'tab-hidden'}`}>
+                            <SpringExperiment/>
+                        </div>
+                        <div className={`absolute inset-0 ${activeTab==='rubber' ? 'tab-shown':'tab-hidden'}`}>
+                            <RubberBandExperiment/>
+                        </div>
                     </div>
                 </div>
             );

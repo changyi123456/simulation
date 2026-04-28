@@ -1,0 +1,1777 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Two-Stage Specific Heat Inquiry Simulation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f8fafc; }
+    #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: #0f172a; color: white; box-shadow: 0 8px 20px rgba(15,23,42,.18); z-index: 50; flex: 0 0 auto; }
+    .topbar-inner { padding: .55rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+    .title { font-weight: 800; font-size: clamp(.95rem, 1.5vw, 1.2rem); line-height: 1.15; letter-spacing: .02em; }
+    .subtitle { font-size: .72rem; color: #cbd5e1; margin-top: .15rem; }
+    .tabs { display: flex; gap: .35rem; background: #1e293b; padding: .25rem; border-radius: .8rem; border: 1px solid #334155; white-space: nowrap; }
+    .tab-btn { border: 0; border-radius: .6rem; padding: .48rem .78rem; font-weight: 800; font-size: .8rem; color: #cbd5e1; background: transparent; cursor: pointer; transition: .15s; }
+    .tab-btn:hover { color: white; background: #334155; }
+    .tab-btn.active.water { background: #2563eb; color: white; }
+    .tab-btn.active.glycerin { background: #047857; color: white; }
+    .frame-wrap { flex: 1 1 auto; min-height: 0; height: calc(100vh - 58px); }
+    .stage-frame { width: 100%; height: 100%; border: 0; display: none; background: white; }
+    .stage-frame.active { display: block; }
+    @media (max-width: 900px) {
+      .topbar-inner { padding: .42rem .6rem; gap: .45rem; }
+      .subtitle { display: none; }
+      .tab-btn { padding: .42rem .55rem; font-size: .72rem; }
+      .frame-wrap { height: calc(100vh - 48px); }
+    }
+    @media (max-height: 760px) {
+      .topbar-inner { padding: .38rem .75rem; }
+      .subtitle { display: none; }
+      .title { font-size: .95rem; }
+      .tab-btn { padding: .38rem .65rem; }
+      .frame-wrap { height: calc(100vh - 46px); }
+    }
+  </style>
+  <script>
+    (function () {
+      const MAX_EVENTS = 500;
+      const history = [];
+      const recordCounts = Object.create(null);
+
+      const tracker = {
+        createdAt: new Date().toISOString(),
+        log(action, details = {}) {
+          const event = {
+            timestamp: new Date().toISOString(),
+            action,
+            details
+          };
+          history.push(event);
+          if (history.length > MAX_EVENTS) history.shift();
+          window.TaskInteractionData = history;
+          return event;
+        },
+        getData() {
+          return history.slice();
+        },
+        clear() {
+          history.length = 0;
+          window.TaskInteractionData = history;
+        },
+        getRecordCount(key) {
+          return recordCounts[key] || 0;
+        },
+        setRecordCount(key, value) {
+          recordCounts[key] = Number(value) || 0;
+          return recordCounts[key];
+        },
+        incrementRecordCount(key) {
+          return this.setRecordCount(key, this.getRecordCount(key) + 1);
+        }
+      };
+
+      window.TaskInteractionData = history;
+      window.TaskInteractionRecordCounts = recordCounts;
+      window.TaskInteractionTracker = tracker;
+      tracker.log('PageLoad', { href: location.href });
+    })();
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div>
+          <div class="title">Two-Stage Inquiry Simulation: Specific Heat and Burner Power</div>
+          <div class="subtitle">Includes stage switching, record-count limits, one-page display, and natural cooling</div>
+        </div>
+        <div class="tabs">
+          <button id="tab-water" class="tab-btn active water" onclick="switchStage('water')">Stage 1 | Water: Burner Power Calibration</button>
+          <button id="tab-glycerin" class="tab-btn" onclick="switchStage('glycerin')">Stage 2 | Water/Glycerin: Specific Heat Inquiry</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame-wrap">
+      <iframe id="frame-water" class="stage-frame active" title="Stage 1: Water Specific Heat Simulation" srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;zh-TW&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+    &lt;title&gt;Physics Virtual Lab: Liquid Specific Heat Measurement - Tracking Version&lt;/title&gt;
+    
+    &lt;!-- Load Tailwind CSS --&gt;
+    &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load React and ReactDOM --&gt;
+    &lt;script crossorigin src=&quot;https://unpkg.com/react@18/umd/react.production.min.js&quot;&gt;&lt;/script&gt;
+    &lt;script crossorigin src=&quot;https://unpkg.com/react-dom@18/umd/react-dom.production.min.js&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load PropTypes (required by Recharts) --&gt;
+    &lt;script src=&quot;https://unpkg.com/prop-types/prop-types.min.js&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load Recharts (chart library) --&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load html2canvas (for exporting charts as images) --&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js&quot;&gt;&lt;/script&gt;
+
+    &lt;!-- Load Babel (for parsing JSX) --&gt;
+    &lt;script src=&quot;https://unpkg.com/@babel/standalone/babel.min.js&quot;&gt;&lt;/script&gt;
+
+    &lt;style&gt;
+        /* Avoid double scrolling when embedded */
+        body { margin: 0; padding: 0; overflow: hidden; }
+        #root { height: 100vh; width: 100vw; }
+    &lt;/style&gt;
+
+    &lt;style&gt;
+      /* === Integrated wrapper: one-page responsive layout without changing the physics model === */
+      html, body, #root { height: 100vh !important; width: 100vw !important; overflow: hidden !important; }
+      header { padding: 0.55rem 0.9rem !important; min-height: auto !important; }
+      header h1 { font-size: 1rem !important; line-height: 1.2 !important; }
+      header .text-sm { font-size: 0.75rem !important; }
+      main { height: calc(100vh - 52px) !important; overflow: hidden !important; }
+      main &gt; div { padding: 0.5rem !important; overflow: hidden !important; }
+      .h-96 { flex: 1 1 auto !important; height: auto !important; min-height: clamp(320px, 48vh, 560px) !important; margin-bottom: 0.45rem !important; }
+      .h-\[400px\] { height: clamp(250px, 43vh, 360px) !important; margin-bottom: 0.5rem !important; }
+      .space-y-4 &gt; :not([hidden]) ~ :not([hidden]) { margin-top: 0.45rem !important; }
+      .p-4 { padding: 0.65rem !important; }
+      .p-3 { padding: 0.45rem 0.65rem !important; }
+      .py-3 { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+      .py-2\.5 { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+      .text-2xl { font-size: 1.25rem !important; line-height: 1.55rem !important; }
+      table .px-4 { padding-left: 0.55rem !important; padding-right: 0.55rem !important; }
+      table .py-2 { padding-top: 0.28rem !important; padding-bottom: 0.28rem !important; }
+      @media (max-height: 760px) {
+        header { padding: 0.42rem 0.75rem !important; }
+        main { height: calc(100vh - 44px) !important; }
+        .h-96 { min-height: clamp(260px, 46vh, 420px) !important; }
+        .h-\[400px\] { height: clamp(220px, 39vh, 310px) !important; }
+        .text-lg { font-size: 0.95rem !important; }
+        .text-xl { font-size: 1rem !important; }
+        .text-sm { font-size: 0.78rem !important; }
+        .text-xs { font-size: 0.68rem !important; }
+      }
+      @media (max-width: 1100px) {
+        main &gt; div { padding: 0.38rem !important; }
+        .h-96 { min-height: clamp(280px, 46vh, 440px) !important; }
+        .h-\[400px\] { height: clamp(230px, 41vh, 330px) !important; }
+      }
+      button:disabled, input:disabled { cursor: not-allowed !important; opacity: 0.45 !important; }
+    &lt;/style&gt;
+
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div id=&quot;root&quot;&gt;&lt;/div&gt;
+
+    &lt;script type=&quot;text/babel&quot;&gt;
+        // ==========================================
+        // 1. Interaction Logger (Interaction data tracker)
+        // ==========================================
+        const TASK_INTERACTION_DATA_KEY = &quot;TaskInteractionData&quot;;
+        const SIM_ID = &quot;SpecificHeat_Basic_React&quot;;
+        let interactionHistory = [];
+
+        const createLocalTaskInteractionTracker = () =&gt; {
+            const history = [];
+            const recordCounts = {};
+            return {
+                log(action, details = {}) {
+                    const event = {
+                        timestamp: new Date().toISOString(),
+                        action,
+                        details
+                    };
+                    history.push(event);
+                    if (history.length &gt; 500) history.shift();
+                    window[TASK_INTERACTION_DATA_KEY] = history;
+                    return event;
+                },
+                getData() {
+                    return history.slice();
+                },
+                clear() {
+                    history.length = 0;
+                    window[TASK_INTERACTION_DATA_KEY] = history;
+                },
+                getRecordCount(key) {
+                    return recordCounts[key] || 0;
+                },
+                setRecordCount(key, value) {
+                    recordCounts[key] = Number(value) || 0;
+                    return recordCounts[key];
+                },
+                incrementRecordCount(key) {
+                    return this.setRecordCount(key, this.getRecordCount(key) + 1);
+                }
+            };
+        };
+
+        const getTaskInteractionTracker = () =&gt; {
+            try {
+                if (window.parent &amp;&amp; window.parent.TaskInteractionTracker) {
+                    return window.parent.TaskInteractionTracker;
+                }
+            } catch (e) {
+                console.warn(&quot;Parent interaction tracker unavailable&quot;, e);
+            }
+            if (!window.__TaskInteractionTracker) {
+                window.__TaskInteractionTracker = createLocalTaskInteractionTracker();
+            }
+            return window.__TaskInteractionTracker;
+        };
+
+        const InteractionLogger = {
+            init: function() {
+                this.log(&#x27;Initialize&#x27;, { sim: SIM_ID });
+            },
+
+            log: function(action, details = {}) {
+                const tracker = getTaskInteractionTracker();
+                const event = tracker.log(action, { sim: SIM_ID, ...details });
+                interactionHistory = tracker.getData ? tracker.getData() : [event];
+                console.log(`[Logged]: ${action}`, details);
+                return event;
+            },
+
+            clear: function() {
+                const tracker = getTaskInteractionTracker();
+                if (tracker.clear) tracker.clear();
+                interactionHistory = [];
+            }
+        };
+
+
+        // ==========================================
+        // 2. React application
+        // ==========================================
+
+        // Destructure React hooks
+        const { useState, useEffect, useRef, useMemo } = React;
+        
+        // Ensure Recharts is loaded correctly
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts || {};
+
+        // --- Built-in icon components ---
+        const IconBase = ({ children, className }) =&gt; (
+            &lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;24&quot; height=&quot;24&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; strokeWidth=&quot;2&quot; strokeLinecap=&quot;round&quot; strokeLinejoin=&quot;round&quot; className={className}&gt;
+                {children}
+            &lt;/svg&gt;
+        );
+
+        const Play = (props) =&gt; &lt;IconBase {...props}&gt;&lt;polygon points=&quot;5 3 19 12 5 21 5 3&quot; /&gt;&lt;/IconBase&gt;;
+        const Pause = (props) =&gt; &lt;IconBase {...props}&gt;&lt;rect x=&quot;6&quot; y=&quot;4&quot; width=&quot;4&quot; height=&quot;16&quot; /&gt;&lt;rect x=&quot;14&quot; y=&quot;4&quot; width=&quot;4&quot; height=&quot;16&quot; /&gt;&lt;/IconBase&gt;;
+        const RotateCcw = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8&quot; /&gt;&lt;path d=&quot;M3 3v5h5&quot; /&gt;&lt;/IconBase&gt;;
+        const Save = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z&quot; /&gt;&lt;polyline points=&quot;17 21 17 13 7 13 7 21&quot; /&gt;&lt;polyline points=&quot;7 3 7 8 15 8&quot; /&gt;&lt;/IconBase&gt;;
+        const Flame = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z&quot; /&gt;&lt;/IconBase&gt;;
+        const Calculator = (props) =&gt; &lt;IconBase {...props}&gt;&lt;rect x=&quot;4&quot; y=&quot;2&quot; width=&quot;16&quot; height=&quot;20&quot; rx=&quot;2&quot; /&gt;&lt;line x1=&quot;8&quot; x2=&quot;16&quot; y1=&quot;6&quot; y2=&quot;6&quot; /&gt;&lt;line x1=&quot;16&quot; x2=&quot;16&quot; y1=&quot;14&quot; y2=&quot;18&quot; /&gt;&lt;path d=&quot;M16 10h.01&quot; /&gt;&lt;path d=&quot;M12 10h.01&quot; /&gt;&lt;path d=&quot;M8 10h.01&quot; /&gt;&lt;path d=&quot;M12 14h.01&quot; /&gt;&lt;path d=&quot;M8 14h.01&quot; /&gt;&lt;path d=&quot;M12 18h.01&quot; /&gt;&lt;path d=&quot;M8 18h.01&quot; /&gt;&lt;/IconBase&gt;;
+        const TrendingUp = (props) =&gt; &lt;IconBase {...props}&gt;&lt;polyline points=&quot;23 6 13.5 15.5 8.5 10.5 1 18&quot; /&gt;&lt;polyline points=&quot;17 6 23 6 23 12&quot; /&gt;&lt;/IconBase&gt;;
+        const Info = (props) =&gt; &lt;IconBase {...props}&gt;&lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;10&quot; /&gt;&lt;path d=&quot;M12 16v-4&quot; /&gt;&lt;path d=&quot;M12 8h.01&quot; /&gt;&lt;/IconBase&gt;;
+        const DownloadIcon = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4&quot; /&gt;&lt;polyline points=&quot;7 10 12 15 17 10&quot; /&gt;&lt;line x1=&quot;12&quot; y1=&quot;15&quot; x2=&quot;12&quot; y2=&quot;3&quot; /&gt;&lt;/IconBase&gt;;
+        const Eye = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z&quot; /&gt;&lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;3&quot; /&gt;&lt;/IconBase&gt;;
+        const EyeOff = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24&quot; /&gt;&lt;line x1=&quot;1&quot; y1=&quot;1&quot; x2=&quot;23&quot; y2=&quot;23&quot; /&gt;&lt;/IconBase&gt;;
+
+        const SpecificHeatLab = () =&gt; {
+            // --- State management ---
+            const [isRunning, setIsRunning] = useState(false);
+            const [time, setTime] = useState(0); // seconds
+            const [temperature, setTemperature] = useState(25.0); // Celsius
+            const [mass, setMass] = useState(200); // water mass (g)
+            const [hasLid, setHasLid] = useState(false); // lid state
+            const [recordedData, setRecordedData] = useState([]); // recorded data points
+            const [showFit, setShowFit] = useState(false); // show fit line
+            const [showChart, setShowChart] = useState(false); // show chart
+            const RECORD_LIMIT = 15;
+            const RECORD_COUNT_KEY = &quot;StageOneWaterRecordCount&quot;;
+            const [recordCount, setRecordCount] = useState(() =&gt; {
+                const tracker = getTaskInteractionTracker();
+                const saved = Number(tracker.getRecordCount ? tracker.getRecordCount(RECORD_COUNT_KEY) : 0);
+                return Number.isFinite(saved) ? saved : 0;
+            });
+            const isLocked = recordCount &gt;= RECORD_LIMIT;
+
+            useEffect(() =&gt; {
+                if (isLocked) setIsRunning(false);
+            }, [isLocked]);
+
+            const chartAreaRef = useRef(null);
+
+            // 1. Initialize logger
+            useEffect(() =&gt; {
+                InteractionLogger.init();
+            }, []);
+
+            // --- Physics constants ---
+            const SPECIFIC_HEAT_WATER = 1.0; // cal/g°C
+            const INPUT_POWER = 24.0; // cal/s
+            const AMBIENT_TEMP = 25.0; // ambient temperature
+            const DT = 0.1; // simulation time step (seconds)
+
+            // --- Heat-loss coefficients ---
+            const COEFF_CONVECTION = 0.04; // cal/s/°C
+            const COEFF_EVAPORATION_BASE = 0.5; // cal/s
+
+            const requestRef = useRef();
+            const experimentActiveRef = useRef(false);
+
+            // --- Core physics simulation loop ---
+            const animate = () =&gt; {
+                if (experimentActiveRef.current) {
+                setTemperature((prevTemp) =&gt; {
+                    // 1. Calculate heat loss
+                    const deltaT = prevTemp - AMBIENT_TEMP;
+                    if (deltaT &lt; 0) return AMBIENT_TEMP;
+
+                    if (!isRunning && deltaT &lt;= 0.02) {
+                        experimentActiveRef.current = false;
+                        return AMBIENT_TEMP;
+                    }
+                    const p_convection = COEFF_CONVECTION * deltaT;
+                    const lidFactor = hasLid ? 0.05 : 1.0; 
+                    const p_evaporation = lidFactor * COEFF_EVAPORATION_BASE * (Math.exp(0.055 * prevTemp) - Math.exp(0.055 * AMBIENT_TEMP));
+                    const p_total_loss = p_convection + p_evaporation;
+
+                    // 2. Calculate net power and temperature rise
+                    const p_net = (isRunning ? INPUT_POWER : 0) - p_total_loss;
+                    const dT = (p_net * DT) / (mass * SPECIFIC_HEAT_WATER);
+
+                    let nextTemp = prevTemp + dT;
+                    if (nextTemp &gt;= 100) nextTemp = 100;
+                    
+                    return nextTemp;
+                });
+
+                setTime((prevTime) =&gt; prevTime + DT);
+                requestRef.current = requestAnimationFrame(animate);
+                }
+            };
+
+            useEffect(() =&gt; {
+                requestRef.current = requestAnimationFrame(animate);
+                return () =&gt; cancelAnimationFrame(requestRef.current);
+            }, [isRunning, mass, hasLid]);
+
+            // --- Helper functions and interaction tracking ---
+            
+            const handleStart = () =&gt; {
+                if (isLocked) return;
+                experimentActiveRef.current = true;
+                setIsRunning(true);
+                InteractionLogger.log(&#x27;ToggleHeating&#x27;, { status: &#x27;On&#x27; });
+            };
+
+            const handleStop = () =&gt; {
+                setIsRunning(false);
+                InteractionLogger.log(&#x27;ToggleHeating&#x27;, { status: &#x27;Off&#x27; });
+            };
+
+            const handleReset = () =&gt; {
+                if (isLocked) return;
+                experimentActiveRef.current = false;
+                setIsRunning(false);
+                setTime(0);
+                setTemperature(25.0);
+                setRecordedData([]);
+                setShowFit(false);
+                setShowChart(false);
+                InteractionLogger.log(&#x27;ResetExperiment&#x27;);
+            };
+
+            const handleRecord = () =&gt; {
+                if (isLocked) return;
+                const tracker = getTaskInteractionTracker();
+                const nextRecordCount = tracker.incrementRecordCount
+                    ? tracker.incrementRecordCount(RECORD_COUNT_KEY)
+                    : recordCount + 1;
+                setRecordCount(nextRecordCount);
+
+                setRecordedData([
+                ...recordedData,
+                { 
+                    id: Date.now(),
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)) 
+                }
+                ]);
+                InteractionLogger.log(&#x27;RecordData&#x27;, { 
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)),
+                    recordCount: nextRecordCount,
+                    recordLimit: RECORD_LIMIT
+                });
+                if (nextRecordCount &gt;= RECORD_LIMIT) {
+                    experimentActiveRef.current = false;
+                    setIsRunning(false);
+                    InteractionLogger.log(&#x27;RecordLimitReached&#x27;, { limit: RECORD_LIMIT });
+                }
+            };
+
+                        const toggleLid = () =&gt; {
+                if (isLocked) return;
+                const newState = !hasLid;
+                setHasLid(newState);
+                InteractionLogger.log(&#x27;ToggleLid&#x27;, { hasLid: newState });
+            };
+
+            const toggleFit = () =&gt; {
+                const newState = !showFit;
+                setShowFit(newState);
+                InteractionLogger.log(&#x27;ToggleFit&#x27;, { visible: newState });
+            };
+
+            const toggleChartVisibility = () =&gt; {
+                const newState = !showChart;
+                setShowChart(newState);
+                InteractionLogger.log(&#x27;ToggleChart&#x27;, { visible: newState });
+            };
+
+            const handleExportImage = () =&gt; {
+                InteractionLogger.log(&#x27;ExportChartImage&#x27;);
+                if (chartAreaRef.current &amp;&amp; window.html2canvas) {
+                    // Use html2canvas to convert the chart area to a canvas and export it as an image
+                    window.html2canvas(chartAreaRef.current, { backgroundColor: &#x27;#ffffff&#x27; }).then(canvas =&gt; {
+                        const url = canvas.toDataURL(&#x27;image/png&#x27;);
+                        const a = document.createElement(&#x27;a&#x27;);
+                        a.href = url;
+                        a.download = `experiment_data_chart_${new Date().getTime()}.png`;
+                        a.click();
+                        InteractionLogger.log(&#x27;ExportChartSuccess&#x27;);
+                    }).catch(err =&gt; {
+                        console.error(&quot;Export failed:&quot;, err);
+                        InteractionLogger.log(&#x27;ExportChartFailed&#x27;, { error: err.message });
+                    });
+                } else {
+                    alert(&quot;The export module is not ready yet. Please try again later.&quot;);
+                }
+            };
+
+            // Slider-specific log function (triggered on onMouseUp / onTouchEnd)
+            const logMassChange = () =&gt; {
+                InteractionLogger.log(&#x27;ChangeMass&#x27;, { value: mass });
+            };
+
+            // --- Linear regression calculation ---
+            const linearFit = useMemo(() =&gt; {
+                if (recordedData.length &lt; 2) return null;
+
+                const n = recordedData.length;
+                let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+                recordedData.forEach(p =&gt; {
+                sumX += p.time;
+                sumY += p.temp;
+                sumXY += p.time * p.temp;
+                sumXX += p.time * p.time;
+                });
+
+                const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                const intercept = (sumY - slope * sumX) / n;
+                const minTime = recordedData[0].time;
+                const maxTime = recordedData[n - 1].time;
+
+                return {
+                slope: slope,
+                intercept: intercept,
+                points: [
+                    { time: minTime, fitTemp: slope * minTime + intercept },
+                    { time: maxTime, fitTemp: slope * maxTime + intercept }
+                ]
+                };
+            }, [recordedData]);
+
+            // --- Visual parameters ---
+            const waterHeight = Math.min(185, (mass / 500) * 150 + 30);
+            const waterColor = `rgba(${Math.min(255, 100 + (temperature - 25) * 2)}, 149, 237, 0.6)`;
+
+            if (!LineChart) {
+                return &lt;div className=&quot;flex items-center justify-center h-screen text-red-600 font-bold&quot;&gt;Error: The chart library (Recharts) failed to load. Please check your network connection or try again later.&lt;/div&gt;;
+            }
+
+            return (
+                &lt;div className=&quot;flex flex-col h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden&quot;&gt;
+                {/* Header */}
+                &lt;header className=&quot;bg-blue-600 text-white p-4 shadow-md flex justify-between items-center z-10 shrink-0&quot;&gt;
+                    &lt;div className=&quot;flex items-center gap-2&quot;&gt;
+                    &lt;Flame className=&quot;w-6 h-6 text-yellow-300&quot; /&gt;
+                    &lt;h1 className=&quot;text-xl font-bold tracking-wide&quot;&gt;Physics Virtual Lab: Liquid Specific Heat Measurement&lt;/h1&gt;
+                    &lt;/div&gt;
+                    &lt;div className=&quot;text-sm bg-blue-700 px-3 py-1 rounded-full border border-blue-400&quot;&gt;
+                    Stable burner power: &lt;span className=&quot;font-mono font-bold text-yellow-300 text-lg&quot;&gt;X&lt;/span&gt; cal/s
+                    &lt;/div&gt;
+                &lt;/header&gt;
+
+                &lt;main className=&quot;flex flex-1 overflow-hidden&quot;&gt;
+                    {/* Left side: simulation and controls */}
+                    &lt;div className=&quot;w-1/2 flex flex-col border-r border-gray-200 bg-white p-4 overflow-y-auto&quot;&gt;
+                    
+                    {/* 1. Visual simulation scene */}
+                    &lt;div className=&quot;relative h-96 bg-gray-100 rounded-xl border border-gray-300 mb-4 flex justify-center items-end pb-2 shadow-inner overflow-hidden&quot;&gt;
+                        
+                        &lt;div className=&quot;flex flex-col items-center mb-4&quot;&gt;
+                        
+                        &lt;div className=&quot;relative w-32 h-48 mb-1&quot;&gt;
+                            
+                            {/* Thermometer */}
+                            &lt;div 
+                            className=&quot;absolute left-1/2 -translate-x-1/2 z-30 flex flex-col items-center&quot; 
+                            style={{ 
+                                bottom: &#x27;20px&#x27;, 
+                                height: &#x27;240px&#x27; 
+                            }}
+                            &gt;
+                            &lt;div className=&quot;w-2 flex-1 bg-yellow-50 border border-gray-400 rounded-t-lg relative shadow-sm&quot;&gt;
+                                &lt;div 
+                                className=&quot;absolute bottom-0 w-full bg-red-500 transition-all duration-100 ease-linear rounded-b-sm&quot;
+                                style={{ height: `${Math.max(5, (temperature / 120) * 100)}%` }}
+                                &gt;&lt;/div&gt;
+                                {[10, 20, 30, 40, 50, 60, 70, 80].map((pos) =&gt; (
+                                &lt;div key={pos} className=&quot;absolute right-0 w-1 h-[1px] bg-black/30&quot; style={{ top: `${pos}%` }}&gt;&lt;/div&gt;
+                                ))}
+                            &lt;/div&gt;
+                            &lt;div className=&quot;w-4 h-4 rounded-full bg-red-600 -mt-1 border border-gray-400 shadow-sm relative z-30&quot;&gt;&lt;/div&gt;
+                            
+                            &lt;div className=&quot;absolute -right-20 top-2 bg-black/80 text-white text-[10px] px-2 py-0.5 rounded font-mono&quot;&gt;
+                                T = {temperature.toFixed(1)}°C
+                            &lt;/div&gt;
+                            &lt;/div&gt;
+
+                            {/* Lid */}
+                            {hasLid &amp;&amp; (
+                            &lt;div className=&quot;absolute -top-3 left-1/2 -translate-x-1/2 w-[136px] h-4 bg-gray-500 rounded-sm z-20 shadow-md border border-gray-600 flex justify-center items-center&quot;&gt;
+                                &lt;div className=&quot;w-8 h-1 bg-gray-700 rounded-full opacity-50&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                            )}
+
+                            {/* Beaker body */}
+                            &lt;div className=&quot;w-full h-full border-x-2 border-b-2 border-gray-400 rounded-b-xl relative bg-white/30 backdrop-blur-[1px] overflow-hidden z-10&quot;&gt;
+                            {/* Water */}
+                            &lt;div 
+                                className=&quot;absolute bottom-0 w-full transition-all duration-500&quot;
+                                style={{ 
+                                height: `${waterHeight}px`, 
+                                backgroundColor: waterColor 
+                                }}
+                            &gt;
+                                {/* Boiling bubbles */}
+                                {temperature &gt; 85 &amp;&amp; isRunning &amp;&amp; (
+                                &lt;div className=&quot;w-full h-full relative overflow-hidden opacity-70&quot;&gt;
+                                    &lt;div className=&quot;absolute bottom-2 left-4 w-2 h-2 bg-white rounded-full animate-ping&quot;&gt;&lt;/div&gt;
+                                    &lt;div className=&quot;absolute bottom-6 right-8 w-2 h-2 bg-white rounded-full animate-bounce&quot;&gt;&lt;/div&gt;
+                                &lt;/div&gt;
+                                )}
+                            &lt;/div&gt;
+
+                            &lt;div className=&quot;absolute right-0 bottom-10 w-3 h-[1px] bg-gray-600&quot;&gt;&lt;/div&gt;
+                            &lt;div className=&quot;absolute right-0 bottom-24 w-4 h-[1px] bg-gray-600&quot;&gt;&lt;/div&gt;
+                            &lt;div className=&quot;absolute right-0 bottom-38 w-3 h-[1px] bg-gray-600&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+
+                            {/* Steam */}
+                            {!hasLid &amp;&amp; temperature &gt; 50 &amp;&amp; isRunning &amp;&amp; (
+                            &lt;div className=&quot;absolute -top-16 left-0 w-full flex justify-center opacity-40 pointer-events-none z-0&quot;&gt;
+                                &lt;div className=&quot;w-2 h-12 bg-gray-400 rounded-full blur-lg animate-pulse&quot; style={{ animationDuration: &#x27;1s&#x27; }}&gt;&lt;/div&gt;
+                                &lt;div className=&quot;w-4 h-16 bg-gray-400 rounded-full blur-lg animate-pulse ml-2&quot; style={{ animationDuration: &#x27;1.5s&#x27; }}&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                            )}
+                        &lt;/div&gt;
+
+                        {/* Wire gauze */}
+                        &lt;div className=&quot;w-40 h-1 bg-gray-700 mx-auto rounded-full z-0 shadow-sm&quot;&gt;&lt;/div&gt;
+
+                        {/* Alcohol burner */}
+                        &lt;div className=&quot;flex flex-col items-center mt-12 relative&quot;&gt;
+                            &lt;div className={`transition-opacity duration-300 absolute -top-12 left-1/2 -translate-x-1/2 ${isRunning ? &#x27;opacity-100&#x27; : &#x27;opacity-0&#x27;}`}&gt;
+                            &lt;div className=&quot;relative&quot;&gt;
+                                &lt;div className=&quot;w-5 h-12 bg-orange-500 rounded-full blur-[3px] animate-pulse absolute top-0 left-1/2 -translate-x-1/2&quot;&gt;&lt;/div&gt;
+                                &lt;div className=&quot;w-3 h-8 bg-yellow-200 rounded-full blur-[1px] absolute top-2 left-1/2 -translate-x-1/2&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                            &lt;/div&gt;
+                            &lt;div className=&quot;w-3 h-4 bg-yellow-900/90 rounded-sm -mt-2 relative z-10&quot;&gt;&lt;/div&gt;
+                            &lt;div className=&quot;w-20 h-14 bg-gray-200 border-2 border-gray-400 rounded-b-xl rounded-t-md shadow-sm relative overflow-hidden flex items-end justify-center z-10&quot;&gt;
+                                &lt;div className=&quot;w-full h-10 bg-blue-300/40&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+                        &lt;/div&gt;
+                    &lt;/div&gt;
+
+                    {/* 2. Control panel */}
+                    &lt;div className=&quot;bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4 shrink-0&quot;&gt;
+                        
+                        {/* Parameter settings */}
+                        &lt;div className=&quot;grid grid-cols-2 gap-4&quot;&gt;
+                        &lt;div&gt;
+                            &lt;label className=&quot;block text-sm font-medium text-gray-700 mb-1&quot;&gt;Water Mass (m)&lt;/label&gt;
+                            &lt;div className=&quot;flex items-center gap-2&quot;&gt;
+                            &lt;input 
+                                type=&quot;range&quot; 
+                                min=&quot;100&quot; 
+                                max=&quot;500&quot; 
+                                step=&quot;50&quot; 
+                                value={mass}
+                                /* Only locked while heating; mass can be changed while paused */
+                                disabled={isLocked || isRunning}
+                                onChange={(e) =&gt; setMass(Number(e.target.value))}
+                                onMouseUp={logMassChange} // record when mouse is released
+                                onTouchEnd={logMassChange} // record when touch ends on mobile
+                                className=&quot;w-full cursor-pointer accent-blue-600 disabled:opacity-50&quot;
+                            /&gt;
+                            &lt;span className=&quot;text-sm font-mono bg-blue-50 text-blue-800 px-2 py-1 rounded font-bold&quot;&gt;{mass} g&lt;/span&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+                        
+                        &lt;div className=&quot;hidden&quot;&gt;
+                            &lt;span className=&quot;text-sm font-medium text-gray-700&quot;&gt;Apparatus settings&lt;/span&gt;
+                            &lt;button 
+                            onClick={toggleLid}
+                            /* Only locked while heating; the lid can be changed while paused */
+                            disabled={isLocked || isRunning}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm disabled:opacity-50 ${
+                                hasLid 
+                                ? &#x27;bg-gray-700 text-white ring-2 ring-gray-400 ring-offset-1&#x27; 
+                                : &#x27;bg-white text-gray-500 border border-gray-300 hover:bg-gray-100&#x27;
+                            }`}
+                            &gt;
+                            {hasLid ? &#x27;Lid On&#x27; : &#x27;No Lid&#x27;}
+                            &lt;/button&gt;
+                        &lt;/div&gt;
+                        &lt;/div&gt;
+
+                        {/* Action buttons */}
+                        &lt;div className=&quot;flex gap-2 pt-2 border-t&quot;&gt;
+                        {!isRunning ? (
+                            &lt;button 
+                            onClick={handleStart}
+                            disabled={isLocked}
+                            className=&quot;flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all&quot;
+                            &gt;
+                            &lt;Play className=&quot;w-5 h-5 fill-current&quot; /&gt; Start Heating
+                            &lt;/button&gt;
+                        ) : (
+                            &lt;button 
+                            onClick={handleStop}
+                            className=&quot;flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all&quot;
+                            &gt;
+                            &lt;Pause className=&quot;w-5 h-5 fill-current&quot; /&gt; Pause Experiment
+                            &lt;/button&gt;
+                        )}
+                        
+                        &lt;button 
+                            onClick={handleRecord}
+                            disabled={isLocked || (!isRunning &amp;&amp; time === 0)}
+                            className=&quot;flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed&quot;
+                        &gt;
+                            &lt;Save className=&quot;w-5 h-5&quot; /&gt; Record Data
+                        &lt;/button&gt;
+
+                        &lt;button 
+                            onClick={handleReset}
+                            disabled={isLocked}
+                            className=&quot;flex items-center justify-center px-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold transition-colors&quot;
+                            title=&quot;Reset Experiment&quot;
+                        &gt;
+                            &lt;RotateCcw className=&quot;w-5 h-5&quot; /&gt;
+                        &lt;/button&gt;
+                        &lt;/div&gt;
+
+                        &lt;div className=&quot;flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800&quot; aria-live=&quot;polite&quot;&gt;
+                            &lt;span className=&quot;flex items-center gap-2 font-bold&quot;&gt;&lt;Info className=&quot;w-4 h-4&quot;/&gt;Record Count&lt;/span&gt;
+                            &lt;span className=&quot;font-mono font-bold&quot;&gt;Current {recordCount} / Limit {RECORD_LIMIT}&lt;/span&gt;
+                        &lt;/div&gt;
+
+                        {/* Current status */}
+                        &lt;div className=&quot;grid grid-cols-2 gap-4 text-center bg-gray-50 p-3 rounded-lg border border-gray-200&quot;&gt;
+                        &lt;div&gt;
+                            &lt;div className=&quot;text-xs text-gray-500 uppercase tracking-wider&quot;&gt;Heating Time (t)&lt;/div&gt;
+                            &lt;div className=&quot;text-2xl font-mono font-bold text-gray-800&quot;&gt;{time.toFixed(1)} &lt;span className=&quot;text-sm text-gray-500 font-normal&quot;&gt;s&lt;/span&gt;&lt;/div&gt;
+                        &lt;/div&gt;
+                        &lt;div&gt;
+                            &lt;div className=&quot;text-xs text-gray-500 uppercase tracking-wider&quot;&gt;Current Temperature (T)&lt;/div&gt;
+                            &lt;div className=&quot;text-2xl font-mono font-bold text-red-600&quot;&gt;{temperature.toFixed(2)} &lt;span className=&quot;text-sm text-gray-500 font-normal&quot;&gt;°C&lt;/span&gt;&lt;/div&gt;
+                        &lt;/div&gt;
+                        &lt;/div&gt;
+
+                    &lt;/div&gt;
+                    &lt;/div&gt;
+
+                    {/* Right side: data and charts */}
+                    &lt;div className=&quot;w-1/2 flex flex-col p-4 bg-gray-50 overflow-y-auto&quot;&gt;
+                    
+                    {/* 1. Chart area */}
+                    &lt;div className=&quot;bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-4 flex-none h-[400px] flex flex-col relative&quot; ref={chartAreaRef}&gt;
+                        &lt;div className=&quot;flex justify-between items-center mb-4&quot;&gt;
+                            &lt;h2 className=&quot;text-lg font-bold text-gray-800 flex items-center gap-2&quot;&gt;
+                                &lt;TrendingUp className=&quot;w-5 h-5 text-blue-600&quot; /&gt;
+                                Temperature-Time Graph
+                            &lt;/h2&gt;
+                            &lt;div className=&quot;flex items-center gap-2&quot; data-html2canvas-ignore=&quot;true&quot;&gt;
+                                {/* Export image button: shown only when the chart is visible */}
+                                {showChart &amp;&amp; (
+                                    &lt;button 
+                                        onClick={handleExportImage}
+                                        className=&quot;text-xs px-3 py-1.5 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 flex items-center gap-1 transition-all font-medium&quot;
+                                    &gt;
+                                        &lt;DownloadIcon className=&quot;w-3 h-3&quot; /&gt;
+                                        Export Image
+                                    &lt;/button&gt;
+                                )}
+
+                                {/* Linear fit button */}
+                                {showChart &amp;&amp; (
+                                    &lt;button 
+                                        onClick={toggleFit}
+                                        disabled={recordedData.length &lt; 2}
+                                        className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
+                                        showFit 
+                                        ? &#x27;bg-purple-100 text-purple-700 border-purple-300&#x27; 
+                                        : &#x27;bg-white text-gray-500 border-gray-300 hover:bg-gray-50&#x27;
+                                        } disabled:opacity-30`}
+                                    &gt;
+                                        &lt;Calculator className=&quot;w-3 h-3&quot; /&gt;
+                                        {showFit ? &#x27;Hide Fit Line&#x27; : &#x27;Show Linear Fit&#x27;}
+                                    &lt;/button&gt;
+                                )}
+
+                                {/* Show/hide chart button */}
+                                &lt;button 
+                                    onClick={toggleChartVisibility}
+                                    className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
+                                    showChart 
+                                    ? &#x27;bg-red-50 text-red-600 border-red-200 hover:bg-red-100&#x27; 
+                                    : &#x27;bg-blue-600 text-white border-blue-600 hover:bg-blue-700&#x27;
+                                    }`}
+                                &gt;
+                                    {showChart ? &lt;EyeOff className=&quot;w-3 h-3&quot; /&gt; : &lt;Eye className=&quot;w-3 h-3&quot; /&gt;}
+                                    {showChart ? &#x27;Hide Data Chart&#x27; : &#x27;Show Data Chart&#x27;}
+                                &lt;/button&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+
+                        {/* Chart body area */}
+                        &lt;div className=&quot;flex-1 w-full relative&quot;&gt;
+                            {showChart ? (
+                                &lt;ResponsiveContainer width=&quot;100%&quot; height=&quot;100%&quot;&gt;
+                                    &lt;LineChart margin={{ top: 10, right: 30, left: 10, bottom: 20 }}&gt;
+                                        &lt;CartesianGrid strokeDasharray=&quot;3 3&quot; opacity={0.3} /&gt;
+                                        &lt;XAxis 
+                                        dataKey=&quot;time&quot; 
+                                        type=&quot;number&quot; 
+                                        domain={[0, &#x27;auto&#x27;]} 
+                                        label={{ value: &#x27;Time t (s)&#x27;, position: &#x27;bottom&#x27;, offset: 0 }} 
+                                        /&gt;
+                                        &lt;YAxis 
+                                        domain={[20, 100]} 
+                                        label={{ value: &#x27;Temperature T (°C)&#x27;, angle: -90, position: &#x27;insideLeft&#x27; }} 
+                                        /&gt;
+                                        &lt;Tooltip 
+                                        contentStyle={{ borderRadius: &#x27;8px&#x27;, border: &#x27;none&#x27;, boxShadow: &#x27;0 4px 6px -1px rgb(0 0 0 / 0.1)&#x27; }}
+                                        formatter={(value) =&gt; `${value} °C`}
+                                        labelFormatter={(label) =&gt; `${label} s`}
+                                        /&gt;
+                                        &lt;Legend verticalAlign=&quot;top&quot; height={36}/&gt;
+                                        
+                                        &lt;Line 
+                                        data={recordedData} 
+                                        type=&quot;monotone&quot; 
+                                        dataKey=&quot;temp&quot; 
+                                        name=&quot;Measured Data&quot; 
+                                        stroke=&quot;#2563eb&quot; 
+                                        strokeWidth={2}
+                                        dot={{ r: 4, fill: &quot;#2563eb&quot;, strokeWidth: 2, stroke: &quot;#fff&quot; }}
+                                        activeDot={{ r: 6 }}
+                                        isAnimationActive={false}
+                                        /&gt;
+
+                                        {showFit &amp;&amp; linearFit &amp;&amp; (
+                                        &lt;Line
+                                            data={linearFit.points}
+                                            dataKey=&quot;fitTemp&quot;
+                                            name=&quot;Linear Fit&quot;
+                                            stroke=&quot;#9333ea&quot;
+                                            strokeWidth={2}
+                                            strokeDasharray=&quot;5 5&quot;
+                                            dot={false}
+                                            isAnimationActive={false}
+                                        /&gt;
+                                        )}
+                                    &lt;/LineChart&gt;
+                                &lt;/ResponsiveContainer&gt;
+                            ) : (
+                                &lt;div className=&quot;absolute inset-0 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg&quot;&gt;
+                                    &lt;TrendingUp className=&quot;w-12 h-12 text-gray-300 mb-3&quot; /&gt;
+                                    &lt;p className=&quot;text-gray-500 font-medium mb-4&quot;&gt;The chart is hidden. Record data, then click to show it.&lt;/p&gt;
+                                    &lt;button 
+                                        onClick={toggleChartVisibility}
+                                        className=&quot;px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-2 transition-all&quot;
+                                    &gt;
+                                        &lt;Eye className=&quot;w-5 h-5&quot; /&gt; Show Data Chart
+                                    &lt;/button&gt;
+                                &lt;/div&gt;
+                            )}
+                        &lt;/div&gt;
+                        
+                        {/* Fit results overlay */}
+                        {showChart &amp;&amp; showFit &amp;&amp; linearFit &amp;&amp; (
+                        &lt;div className=&quot;absolute top-20 right-14 bg-white/95 backdrop-blur border border-purple-300 p-4 rounded-lg shadow-xl text-purple-900 z-10 w-64&quot;&gt;
+                            &lt;p className=&quot;font-bold border-b border-purple-200 pb-2 mb-2 text-base&quot;&gt;Data Analysis&lt;/p&gt;
+                            &lt;div className=&quot;space-y-1 text-sm&quot;&gt;
+                            &lt;p className=&quot;flex justify-between&quot;&gt;
+                                &lt;span&gt;Slope:&lt;/span&gt;
+                                &lt;span className=&quot;font-mono font-bold&quot;&gt;{linearFit.slope.toFixed(4)}&lt;/span&gt;
+                            &lt;/p&gt;
+                            &lt;div className=&quot;mt-3 pt-2 border-t border-purple-100&quot;&gt;
+                                &lt;p className=&quot;text-xs text-gray-500 mb-1&quot;&gt;Heat Formula Hint:&lt;/p&gt;
+                                &lt;p className=&quot;font-mono text-center font-bold bg-purple-50 p-2 rounded text-xs&quot;&gt;
+                                ΔH = m × s × ΔT
+                                &lt;/p&gt;
+                                &lt;p className=&quot;text-xs text-gray-500 mt-2 text-center&quot;&gt;
+                                Use the slope (Delta T / Delta t), mass (m), and specific heat (s) &lt;br/&gt;
+                                to estimate burner power P (Delta H / Delta t)
+                                &lt;/p&gt;
+                            &lt;/div&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+                        )}
+                    &lt;/div&gt;
+
+                    {/* 2. Data Record Table */}
+                    &lt;div className=&quot;bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0&quot;&gt;
+                        &lt;div className=&quot;p-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center shrink-0&quot;&gt;
+                        &lt;span&gt;Data Record Table&lt;/span&gt;
+                        &lt;span className=&quot;text-xs font-normal text-gray-500 flex items-center gap-1&quot;&gt;
+                            &lt;Info className=&quot;w-3 h-3&quot;/&gt; 
+                            Record Count: {recordCount} / {RECORD_LIMIT} | {isLocked ? &#x27;Locked&#x27; : &#x27;Record at least 2 data points&#x27;}
+                        &lt;/span&gt;
+                        &lt;/div&gt;
+                        &lt;div className=&quot;overflow-auto flex-1&quot;&gt;
+                        &lt;table className=&quot;w-full text-sm text-left&quot;&gt;
+                            &lt;thead className=&quot;text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10&quot;&gt;
+                            &lt;tr&gt;
+                                &lt;th className=&quot;px-4 py-3&quot;&gt;#&lt;/th&gt;
+                                &lt;th className=&quot;px-4 py-3&quot;&gt;Time (s)&lt;/th&gt;
+                                &lt;th className=&quot;px-4 py-3&quot;&gt;Temperature (°C)&lt;/th&gt;
+                                &lt;th className=&quot;px-4 py-3 text-right&quot;&gt;Temperature Rise Delta T&lt;/th&gt;
+                            &lt;/tr&gt;
+                            &lt;/thead&gt;
+                            &lt;tbody&gt;
+                            {recordedData.length === 0 ? (
+                                &lt;tr&gt;
+                                &lt;td colSpan=&quot;4&quot; className=&quot;text-center py-10 text-gray-400 italic&quot;&gt;
+                                    No data recorded yet...
+                                &lt;/td&gt;
+                                &lt;/tr&gt;
+                            ) : (
+                                recordedData.map((row, index) =&gt; (
+                                &lt;tr key={row.id} className=&quot;bg-white border-b hover:bg-blue-50 transition-colors&quot;&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-medium text-gray-500&quot;&gt;{index + 1}&lt;/td&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-mono&quot;&gt;{row.time.toFixed(1)}&lt;/td&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-mono font-bold text-gray-800&quot;&gt;{row.temp.toFixed(2)}&lt;/td&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-mono text-right text-gray-500&quot;&gt;
+                                    {(row.temp - 25).toFixed(2)}
+                                    &lt;/td&gt;
+                                &lt;/tr&gt;
+                                ))
+                            )}
+                            &lt;/tbody&gt;
+                        &lt;/table&gt;
+                        &lt;/div&gt;
+                    &lt;/div&gt;
+
+                    &lt;/div&gt;
+                &lt;/main&gt;
+                &lt;/div&gt;
+            );
+        };
+
+        // Render component into the DOM
+        const root = ReactDOM.createRoot(document.getElementById(&#x27;root&#x27;));
+        root.render(&lt;SpecificHeatLab /&gt;);
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;"></iframe>
+      <iframe id="frame-glycerin" class="stage-frame" title="Stage 2: Water and Glycerin Specific Heat Simulation" srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;zh-TW&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+    &lt;title&gt;Advanced Specific Heat Lab: Glycerin Measurement - Tracking Version&lt;/title&gt;
+    
+    &lt;!-- Load Tailwind CSS --&gt;
+    &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load React and ReactDOM --&gt;
+    &lt;script crossorigin src=&quot;https://unpkg.com/react@18/umd/react.production.min.js&quot;&gt;&lt;/script&gt;
+    &lt;script crossorigin src=&quot;https://unpkg.com/react-dom@18/umd/react-dom.production.min.js&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load PropTypes (required by Recharts; fixes oneOfType errors) --&gt;
+    &lt;script src=&quot;https://unpkg.com/prop-types/prop-types.min.js&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load Recharts (chart library) --&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js&quot;&gt;&lt;/script&gt;
+    
+    &lt;!-- Load html2canvas (for exporting charts as images) --&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js&quot;&gt;&lt;/script&gt;
+
+    &lt;!-- Load Babel (for parsing JSX) --&gt;
+    &lt;script src=&quot;https://unpkg.com/@babel/standalone/babel.min.js&quot;&gt;&lt;/script&gt;
+
+    &lt;style&gt;
+        /* Avoid double scrolling when embedded */
+        body { margin: 0; padding: 0; overflow: hidden; }
+        #root { height: 100vh; width: 100vw; }
+    &lt;/style&gt;
+
+    &lt;style&gt;
+      /* === Integrated wrapper: one-page responsive layout without changing the physics model === */
+      html, body, #root { height: 100vh !important; width: 100vw !important; overflow: hidden !important; }
+      header { padding: 0.55rem 0.9rem !important; min-height: auto !important; }
+      header h1 { font-size: 1rem !important; line-height: 1.2 !important; }
+      header .text-sm { font-size: 0.75rem !important; }
+      main { height: calc(100vh - 52px) !important; overflow: hidden !important; }
+      main &gt; div { padding: 0.5rem !important; overflow: hidden !important; }
+      .h-96 { flex: 1 1 auto !important; height: auto !important; min-height: clamp(320px, 48vh, 560px) !important; margin-bottom: 0.45rem !important; }
+      .h-\[400px\] { height: clamp(250px, 43vh, 360px) !important; margin-bottom: 0.5rem !important; }
+      .space-y-4 &gt; :not([hidden]) ~ :not([hidden]) { margin-top: 0.45rem !important; }
+      .p-4 { padding: 0.65rem !important; }
+      .p-3 { padding: 0.45rem 0.65rem !important; }
+      .py-3 { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+      .py-2\.5 { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+      .text-2xl { font-size: 1.25rem !important; line-height: 1.55rem !important; }
+      table .px-4 { padding-left: 0.55rem !important; padding-right: 0.55rem !important; }
+      table .py-2 { padding-top: 0.28rem !important; padding-bottom: 0.28rem !important; }
+      @media (max-height: 760px) {
+        header { padding: 0.42rem 0.75rem !important; }
+        main { height: calc(100vh - 44px) !important; }
+        .h-96 { min-height: clamp(260px, 46vh, 420px) !important; }
+        .h-\[400px\] { height: clamp(220px, 39vh, 310px) !important; }
+        .text-lg { font-size: 0.95rem !important; }
+        .text-xl { font-size: 1rem !important; }
+        .text-sm { font-size: 0.78rem !important; }
+        .text-xs { font-size: 0.68rem !important; }
+      }
+      @media (max-width: 1100px) {
+        main &gt; div { padding: 0.38rem !important; }
+        .h-96 { min-height: clamp(280px, 46vh, 440px) !important; }
+        .h-\[400px\] { height: clamp(230px, 41vh, 330px) !important; }
+      }
+      button:disabled, input:disabled { cursor: not-allowed !important; opacity: 0.45 !important; }
+    &lt;/style&gt;
+
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div id=&quot;root&quot;&gt;&lt;/div&gt;
+
+    &lt;script type=&quot;text/babel&quot;&gt;
+        // ==========================================
+        // 1. Interaction Logger (Interaction data tracker)
+        // ==========================================
+        const TASK_INTERACTION_DATA_KEY = &quot;TaskInteractionData&quot;;
+        const SIM_ID = &quot;SpecificHeat_Advanced_React&quot;;
+        let interactionHistory = [];
+
+        const createLocalTaskInteractionTracker = () =&gt; {
+            const history = [];
+            const recordCounts = {};
+            return {
+                log(action, details = {}) {
+                    const event = {
+                        timestamp: new Date().toISOString(),
+                        action,
+                        details
+                    };
+                    history.push(event);
+                    if (history.length &gt; 500) history.shift();
+                    window[TASK_INTERACTION_DATA_KEY] = history;
+                    return event;
+                },
+                getData() {
+                    return history.slice();
+                },
+                clear() {
+                    history.length = 0;
+                    window[TASK_INTERACTION_DATA_KEY] = history;
+                },
+                getRecordCount(key) {
+                    return recordCounts[key] || 0;
+                },
+                setRecordCount(key, value) {
+                    recordCounts[key] = Number(value) || 0;
+                    return recordCounts[key];
+                },
+                incrementRecordCount(key) {
+                    return this.setRecordCount(key, this.getRecordCount(key) + 1);
+                }
+            };
+        };
+
+        const getTaskInteractionTracker = () =&gt; {
+            try {
+                if (window.parent &amp;&amp; window.parent.TaskInteractionTracker) {
+                    return window.parent.TaskInteractionTracker;
+                }
+            } catch (e) {
+                console.warn(&quot;Parent interaction tracker unavailable&quot;, e);
+            }
+            if (!window.__TaskInteractionTracker) {
+                window.__TaskInteractionTracker = createLocalTaskInteractionTracker();
+            }
+            return window.__TaskInteractionTracker;
+        };
+
+        const InteractionLogger = {
+            init: function() {
+                this.log(&#x27;Initialize&#x27;, { sim: SIM_ID });
+            },
+
+            log: function(action, details = {}) {
+                const tracker = getTaskInteractionTracker();
+                const event = tracker.log(action, { sim: SIM_ID, ...details });
+                interactionHistory = tracker.getData ? tracker.getData() : [event];
+                return event;
+            },
+
+            clear: function() {
+                const tracker = getTaskInteractionTracker();
+                if (tracker.clear) tracker.clear();
+                interactionHistory = [];
+            }
+        };
+
+
+        // ==========================================
+        // 2. React application
+        // ==========================================
+        
+        // Destructure React hooks
+        const { useState, useEffect, useRef, useMemo } = React;
+        
+        // Ensure Recharts is loaded correctly
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts || {};
+
+        // --- Built-in icon components (replaces lucide-react dependency to avoid errors) ---
+        const IconBase = ({ children, className }) =&gt; (
+            &lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;24&quot; height=&quot;24&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; strokeWidth=&quot;2&quot; strokeLinecap=&quot;round&quot; strokeLinejoin=&quot;round&quot; className={className}&gt;
+                {children}
+            &lt;/svg&gt;
+        );
+
+        const Play = (props) =&gt; &lt;IconBase {...props}&gt;&lt;polygon points=&quot;5 3 19 12 5 21 5 3&quot; /&gt;&lt;/IconBase&gt;;
+        const Pause = (props) =&gt; &lt;IconBase {...props}&gt;&lt;rect x=&quot;6&quot; y=&quot;4&quot; width=&quot;4&quot; height=&quot;16&quot; /&gt;&lt;rect x=&quot;14&quot; y=&quot;4&quot; width=&quot;4&quot; height=&quot;16&quot; /&gt;&lt;/IconBase&gt;;
+        const RotateCcw = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8&quot; /&gt;&lt;path d=&quot;M3 3v5h5&quot; /&gt;&lt;/IconBase&gt;;
+        const Save = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z&quot; /&gt;&lt;polyline points=&quot;17 21 17 13 7 13 7 21&quot; /&gt;&lt;polyline points=&quot;7 3 7 8 15 8&quot; /&gt;&lt;/IconBase&gt;;
+        const Flame = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z&quot; /&gt;&lt;/IconBase&gt;;
+        const Calculator = (props) =&gt; &lt;IconBase {...props}&gt;&lt;rect x=&quot;4&quot; y=&quot;2&quot; width=&quot;16&quot; height=&quot;20&quot; rx=&quot;2&quot; /&gt;&lt;line x1=&quot;8&quot; x2=&quot;16&quot; y1=&quot;6&quot; y2=&quot;6&quot; /&gt;&lt;line x1=&quot;16&quot; x2=&quot;16&quot; y1=&quot;14&quot; y2=&quot;18&quot; /&gt;&lt;path d=&quot;M16 10h.01&quot; /&gt;&lt;path d=&quot;M12 10h.01&quot; /&gt;&lt;path d=&quot;M8 10h.01&quot; /&gt;&lt;path d=&quot;M12 14h.01&quot; /&gt;&lt;path d=&quot;M8 14h.01&quot; /&gt;&lt;path d=&quot;M12 18h.01&quot; /&gt;&lt;path d=&quot;M8 18h.01&quot; /&gt;&lt;/IconBase&gt;;
+        const TrendingUp = (props) =&gt; &lt;IconBase {...props}&gt;&lt;polyline points=&quot;23 6 13.5 15.5 8.5 10.5 1 18&quot; /&gt;&lt;polyline points=&quot;17 6 23 6 23 12&quot; /&gt;&lt;/IconBase&gt;;
+        const Info = (props) =&gt; &lt;IconBase {...props}&gt;&lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;10&quot; /&gt;&lt;path d=&quot;M12 16v-4&quot; /&gt;&lt;path d=&quot;M12 8h.01&quot; /&gt;&lt;/IconBase&gt;;
+        const FlaskConical = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2&quot; /&gt;&lt;path d=&quot;M8.5 2h7&quot; /&gt;&lt;path d=&quot;M7 16h10&quot; /&gt;&lt;/IconBase&gt;;
+        const DownloadIcon = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4&quot; /&gt;&lt;polyline points=&quot;7 10 12 15 17 10&quot; /&gt;&lt;line x1=&quot;12&quot; y1=&quot;15&quot; x2=&quot;12&quot; y2=&quot;3&quot; /&gt;&lt;/IconBase&gt;;
+        const Eye = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z&quot; /&gt;&lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;3&quot; /&gt;&lt;/IconBase&gt;;
+        const EyeOff = (props) =&gt; &lt;IconBase {...props}&gt;&lt;path d=&quot;M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24&quot; /&gt;&lt;line x1=&quot;1&quot; y1=&quot;1&quot; x2=&quot;23&quot; y2=&quot;23&quot; /&gt;&lt;/IconBase&gt;;
+
+        const SpecificHeatLabAdvanced = () =&gt; {
+            // --- State management ---
+            const [isRunning, setIsRunning] = useState(false);
+            const [time, setTime] = useState(0); // seconds
+            const [temperature, setTemperature] = useState(25.0); // Celsius
+            const [mass, setMass] = useState(200); // liquid mass (g)
+            const [hasLid, setHasLid] = useState(false); // lid state
+            const [liquidType, setLiquidType] = useState(&#x27;water&#x27;); // &#x27;water&#x27; or &#x27;glycerin&#x27;
+            const [recordedData, setRecordedData] = useState([]); // recorded data points
+            const [showFit, setShowFit] = useState(false); // show fit line
+            const [showChart, setShowChart] = useState(false); // show chart
+            const RECORD_LIMIT = 30;
+            const RECORD_COUNT_KEY = &quot;StageTwoAdvancedRecordCount&quot;;
+            const [recordCount, setRecordCount] = useState(() =&gt; {
+                const tracker = getTaskInteractionTracker();
+                const saved = Number(tracker.getRecordCount ? tracker.getRecordCount(RECORD_COUNT_KEY) : 0);
+                return Number.isFinite(saved) ? saved : 0;
+            });
+            const isLocked = recordCount &gt;= RECORD_LIMIT;
+
+            useEffect(() =&gt; {
+                if (isLocked) setIsRunning(false);
+            }, [isLocked]);
+
+            const chartAreaRef = useRef(null);
+
+            // 1. Initialize logger (useEffect simulates componentDidMount)
+            useEffect(() =&gt; {
+                InteractionLogger.init();
+            }, []);
+
+            // --- Physics constants ---
+            const SPECIFIC_HEAT_WATER = 1.0; // cal/g°C
+            const SPECIFIC_HEAT_GLYCERIN = 0.58; // cal/g°C (specific heat of glycerin)
+            
+            // Internal burner power setting (unknown X)
+            const INPUT_POWER = 30.0; // cal/s
+            
+            const AMBIENT_TEMP = 25.0; // ambient temperature
+            const DT = 0.1; // simulation time step (seconds)
+
+            // --- Heat-loss coefficients ---
+            const COEFF_CONVECTION = 0.04; // cal/s/°C
+            // Glycerin is more viscous and has a higher boiling point, so evaporation is much lower than water; use a smaller evaporation coefficient here
+            const COEFF_EVAPORATION_WATER = 0.5; 
+            const COEFF_EVAPORATION_GLYCERIN = 0.1; 
+
+            const requestRef = useRef();
+            const experimentActiveRef = useRef(false);
+
+            // --- Core physics simulation loop ---
+            const animate = () =&gt; {
+                if (experimentActiveRef.current) {
+                setTemperature((prevTemp) =&gt; {
+                    // 0. Get current liquid properties
+                    const currentS = liquidType === &#x27;water&#x27; ? SPECIFIC_HEAT_WATER : SPECIFIC_HEAT_GLYCERIN;
+                    const currentEvapCoeff = liquidType === &#x27;water&#x27; ? COEFF_EVAPORATION_WATER : COEFF_EVAPORATION_GLYCERIN;
+                    
+                    // 1. Calculate heat loss
+                    const deltaT = prevTemp - AMBIENT_TEMP;
+                    if (deltaT &lt; 0) return AMBIENT_TEMP;
+
+                    if (!isRunning && deltaT &lt;= 0.02) {
+                        experimentActiveRef.current = false;
+                        return AMBIENT_TEMP;
+                    }
+                    const p_convection = COEFF_CONVECTION * deltaT;
+                    const lidFactor = hasLid ? 0.05 : 1.0; 
+                    
+                    // Evaporation model (simplified)
+                    const p_evaporation = lidFactor * currentEvapCoeff * (Math.exp(0.055 * prevTemp) - Math.exp(0.055 * AMBIENT_TEMP));
+                    
+                    const p_total_loss = p_convection + p_evaporation;
+
+                    // 2. Calculate net power and temperature rise
+                    const p_net = (isRunning ? INPUT_POWER : 0) - p_total_loss;
+                    const dT = (p_net * DT) / (mass * currentS);
+
+                    let nextTemp = prevTemp + dT;
+
+                    // 3. Boiling-point limit (water = 100; glycerin = 290, not limited here because it is hard to reach)
+                    if (liquidType === &#x27;water&#x27; &amp;&amp; nextTemp &gt;= 100) {
+                        nextTemp = 100;
+                    }
+                    
+                    return nextTemp;
+                });
+
+                setTime((prevTime) =&gt; prevTime + DT);
+                requestRef.current = requestAnimationFrame(animate);
+                }
+            };
+
+            useEffect(() =&gt; {
+                requestRef.current = requestAnimationFrame(animate);
+                return () =&gt; cancelAnimationFrame(requestRef.current);
+            }, [isRunning, mass, hasLid, liquidType]);
+
+            // --- Helper functions and interaction tracking ---
+            
+            const handleStart = () =&gt; {
+                if (isLocked) return;
+                experimentActiveRef.current = true;
+                setIsRunning(true);
+                InteractionLogger.log(&#x27;ToggleHeating&#x27;, { status: &#x27;On&#x27; });
+            };
+
+            const handleStop = () =&gt; {
+                setIsRunning(false);
+                InteractionLogger.log(&#x27;ToggleHeating&#x27;, { status: &#x27;Off&#x27; });
+            };
+
+            const handleReset = () =&gt; {
+                if (isLocked) return;
+                experimentActiveRef.current = false;
+                setIsRunning(false);
+                setTime(0);
+                setTemperature(25.0);
+                setRecordedData([]);
+                setShowFit(false);
+                setShowChart(false);
+                InteractionLogger.log(&#x27;ResetExperiment&#x27;);
+            };
+
+            // Reset when changing liquid
+            const handleLiquidChange = (type) =&gt; {
+                if (isLocked) return;
+                setLiquidType(type);
+                handleReset();
+                InteractionLogger.log(&#x27;ChangeLiquid&#x27;, { type: type });
+            };
+
+            const handleRecord = () =&gt; {
+                if (isLocked) return;
+                const tracker = getTaskInteractionTracker();
+                const nextRecordCount = tracker.incrementRecordCount
+                    ? tracker.incrementRecordCount(RECORD_COUNT_KEY)
+                    : recordCount + 1;
+                setRecordCount(nextRecordCount);
+
+                setRecordedData([
+                ...recordedData,
+                { 
+                    id: Date.now(),
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)) 
+                }
+                ]);
+                InteractionLogger.log(&#x27;RecordData&#x27;, { 
+                    time: parseFloat(time.toFixed(1)), 
+                    temp: parseFloat(temperature.toFixed(2)),
+                    liquid: liquidType,
+                    recordCount: nextRecordCount,
+                    recordLimit: RECORD_LIMIT
+                });
+                if (nextRecordCount &gt;= RECORD_LIMIT) {
+                    experimentActiveRef.current = false;
+                    setIsRunning(false);
+                    InteractionLogger.log(&#x27;RecordLimitReached&#x27;, { limit: RECORD_LIMIT });
+                }
+            };
+
+                        const toggleLid = () =&gt; {
+                if (isLocked) return;
+                const newState = !hasLid;
+                setHasLid(newState);
+                InteractionLogger.log(&#x27;ToggleLid&#x27;, { hasLid: newState });
+            };
+
+            const toggleFit = () =&gt; {
+                const newState = !showFit;
+                setShowFit(newState);
+                InteractionLogger.log(&#x27;ToggleFit&#x27;, { visible: newState });
+            };
+
+            const toggleChartVisibility = () =&gt; {
+                const newState = !showChart;
+                setShowChart(newState);
+                InteractionLogger.log(&#x27;ToggleChart&#x27;, { visible: newState });
+            };
+
+            const handleExportImage = () =&gt; {
+                InteractionLogger.log(&#x27;ExportChartImage&#x27;);
+                if (chartAreaRef.current &amp;&amp; window.html2canvas) {
+                    // Use html2canvas to convert the chart area to a canvas and export it as an image
+                    window.html2canvas(chartAreaRef.current, { backgroundColor: &#x27;#ffffff&#x27; }).then(canvas =&gt; {
+                        const url = canvas.toDataURL(&#x27;image/png&#x27;);
+                        const a = document.createElement(&#x27;a&#x27;);
+                        a.href = url;
+                        a.download = `advanced_experiment_data_chart_${new Date().getTime()}.png`;
+                        a.click();
+                        InteractionLogger.log(&#x27;ExportChartSuccess&#x27;);
+                    }).catch(err =&gt; {
+                        console.error(&quot;Export failed:&quot;, err);
+                        InteractionLogger.log(&#x27;ExportChartFailed&#x27;, { error: err.message });
+                    });
+                } else {
+                    alert(&quot;The export module is not ready yet. Please try again later.&quot;);
+                }
+            };
+
+            // Slider-specific log function (triggered on onMouseUp / onTouchEnd to avoid excessive data)
+            const logMassChange = () =&gt; {
+                InteractionLogger.log(&#x27;ChangeMass&#x27;, { value: mass });
+            };
+
+            // --- Linear regression calculation ---
+            const linearFit = useMemo(() =&gt; {
+                if (recordedData.length &lt; 2) return null;
+
+                const n = recordedData.length;
+                let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+                recordedData.forEach(p =&gt; {
+                sumX += p.time;
+                sumY += p.temp;
+                sumXY += p.time * p.temp;
+                sumXX += p.time * p.time;
+                });
+
+                const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                const intercept = (sumY - slope * sumX) / n;
+                const minTime = recordedData[0].time;
+                const maxTime = recordedData[n - 1].time;
+
+                return {
+                slope: slope,
+                intercept: intercept,
+                points: [
+                    { time: minTime, fitTemp: slope * minTime + intercept },
+                    { time: maxTime, fitTemp: slope * maxTime + intercept }
+                ]
+                };
+            }, [recordedData]);
+
+            // --- Visual parameters ---
+            const waterHeight = Math.min(185, (mass / 500) * 150 + 30);
+            // Color switching: water (blue), glycerin (pale yellow viscous look)
+            const fluidColor = liquidType === &#x27;water&#x27; 
+                ? `rgba(${Math.min(255, 100 + (temperature - 25) * 2)}, 149, 237, 0.6)`
+                : `rgba(255, 240, 150, 0.7)`; // glycerin color
+
+            if (!LineChart) {
+                return &lt;div className=&quot;flex items-center justify-center h-screen text-red-600 font-bold&quot;&gt;Error: The chart library (Recharts) failed to load. Please check your network connection or try again later.&lt;/div&gt;;
+            }
+
+            return (
+                &lt;div className=&quot;flex flex-col h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden&quot;&gt;
+                {/* Header */}
+                &lt;header className=&quot;bg-emerald-700 text-white p-4 shadow-md flex justify-between items-center z-10 shrink-0&quot;&gt;
+                    &lt;div className=&quot;flex items-center gap-2&quot;&gt;
+                    &lt;FlaskConical className=&quot;w-6 h-6 text-yellow-300&quot; /&gt;
+                    &lt;h1 className=&quot;text-xl font-bold tracking-wide&quot;&gt;Advanced Lab: Measuring the Specific Heat of an Unknown Liquid (Glycerin)&lt;/h1&gt;
+                    &lt;/div&gt;
+                    &lt;div className=&quot;text-sm bg-emerald-800 px-3 py-1 rounded-full border border-emerald-500&quot;&gt;
+                    Burner power: &lt;span className=&quot;font-mono font-bold text-yellow-300 text-lg&quot;&gt;X&lt;/span&gt; cal/s (unknown)
+                    &lt;/div&gt;
+                &lt;/header&gt;
+
+                &lt;main className=&quot;flex flex-1 overflow-hidden&quot;&gt;
+                    {/* Left side: simulation and controls */}
+                    &lt;div className=&quot;w-1/2 flex flex-col border-r border-gray-200 bg-white p-4 overflow-y-auto&quot;&gt;
+                    
+                    {/* 1. Visual simulation scene */}
+                    &lt;div className=&quot;relative h-96 bg-gray-100 rounded-xl border border-gray-300 mb-4 flex justify-center items-end pb-2 shadow-inner overflow-hidden&quot;&gt;
+                        
+                        {/* Label: show current liquid */}
+                        &lt;div className=&quot;absolute top-4 left-4 z-20 bg-white/80 backdrop-blur px-3 py-1 rounded border border-gray-300 shadow-sm text-sm font-bold text-gray-700&quot;&gt;
+                            Current liquid: {liquidType === &#x27;water&#x27; ? &#x27;Water&#x27; : &#x27;Glycerin&#x27;}
+                        &lt;/div&gt;
+
+                        {/* Apparatus group */}
+                        &lt;div className=&quot;flex flex-col items-center mb-4&quot;&gt;
+                        
+                        {/* === Beaker module === */}
+                        &lt;div className=&quot;relative w-32 h-48 mb-1&quot;&gt;
+                            
+                            {/* Thermometer */}
+                            &lt;div 
+                            className=&quot;absolute left-1/2 -translate-x-1/2 z-30 flex flex-col items-center&quot; 
+                            style={{ 
+                                bottom: &#x27;20px&#x27;, 
+                                height: &#x27;240px&#x27; 
+                            }}
+                            &gt;
+                            &lt;div className=&quot;w-2 flex-1 bg-yellow-50 border border-gray-400 rounded-t-lg relative shadow-sm&quot;&gt;
+                                &lt;div 
+                                className=&quot;absolute bottom-0 w-full bg-red-500 transition-all duration-100 ease-linear rounded-b-sm&quot;
+                                style={{ height: `${Math.max(5, (temperature / 120) * 100)}%` }}
+                                &gt;&lt;/div&gt;
+                                {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((pos) =&gt; (
+                                &lt;div key={pos} className=&quot;absolute right-0 w-1 h-[1px] bg-black/30&quot; style={{ bottom: `${pos}%` }}&gt;&lt;/div&gt; 
+                                ))}
+                            &lt;/div&gt;
+                            &lt;div className=&quot;w-4 h-4 rounded-full bg-red-600 -mt-1 border border-gray-400 shadow-sm relative z-30&quot;&gt;&lt;/div&gt;
+                            
+                            &lt;div className=&quot;absolute -right-20 top-2 bg-black/80 text-white text-[10px] px-2 py-0.5 rounded font-mono&quot;&gt;
+                                T = {temperature.toFixed(1)}°C
+                            &lt;/div&gt;
+                            &lt;/div&gt;
+
+                            {/* Lid */}
+                            {hasLid &amp;&amp; (
+                            &lt;div className=&quot;absolute -top-3 left-1/2 -translate-x-1/2 w-[136px] h-4 bg-gray-500 rounded-sm z-20 shadow-md border border-gray-600 flex justify-center items-center&quot;&gt;
+                                &lt;div className=&quot;w-8 h-1 bg-gray-700 rounded-full opacity-50&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                            )}
+
+                            {/* Beaker body */}
+                            &lt;div className=&quot;w-full h-full border-x-2 border-b-2 border-gray-400 rounded-b-xl relative bg-white/30 backdrop-blur-[1px] overflow-hidden z-10&quot;&gt;
+                            {/* Liquid */}
+                            &lt;div 
+                                className=&quot;absolute bottom-0 w-full transition-all duration-500&quot;
+                                style={{ 
+                                height: `${waterHeight}px`, 
+                                backgroundColor: fluidColor 
+                                }}
+                            &gt;
+                                {/* Boiling bubbles (water only at 100 degrees) */}
+                                {liquidType === &#x27;water&#x27; &amp;&amp; temperature &gt;= 100 &amp;&amp; isRunning &amp;&amp; (
+                                &lt;div className=&quot;w-full h-full relative overflow-hidden opacity-70&quot;&gt;
+                                    &lt;div className=&quot;absolute bottom-2 left-4 w-2 h-2 bg-white rounded-full animate-ping&quot;&gt;&lt;/div&gt;
+                                    &lt;div className=&quot;absolute bottom-6 right-8 w-2 h-2 bg-white rounded-full animate-bounce&quot;&gt;&lt;/div&gt;
+                                    &lt;div className=&quot;absolute bottom-10 left-10 w-3 h-3 bg-white/50 rounded-full animate-pulse&quot;&gt;&lt;/div&gt;
+                                &lt;/div&gt;
+                                )}
+                            &lt;/div&gt;
+
+                            {/* Scale marks */}
+                            &lt;div className=&quot;absolute right-0 bottom-10 w-3 h-[1px] bg-gray-600&quot;&gt;&lt;/div&gt;
+                            &lt;div className=&quot;absolute right-0 bottom-24 w-4 h-[1px] bg-gray-600&quot;&gt;&lt;/div&gt;
+                            &lt;div className=&quot;absolute right-0 bottom-38 w-3 h-[1px] bg-gray-600&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+
+                            {/* Steam (shown for uncovered water) */}
+                            {liquidType === &#x27;water&#x27; &amp;&amp; !hasLid &amp;&amp; temperature &gt; 60 &amp;&amp; isRunning &amp;&amp; (
+                            &lt;div className=&quot;absolute -top-16 left-0 w-full flex justify-center opacity-40 pointer-events-none z-0&quot;&gt;
+                                &lt;div className=&quot;w-2 h-12 bg-gray-400 rounded-full blur-lg animate-pulse&quot; style={{ animationDuration: &#x27;1s&#x27; }}&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                            )}
+                        &lt;/div&gt;
+
+                        {/* Wire gauze */}
+                        &lt;div className=&quot;w-40 h-1 bg-gray-700 mx-auto rounded-full z-0 shadow-sm&quot;&gt;&lt;/div&gt;
+
+                        {/* Alcohol burner */}
+                        &lt;div className=&quot;flex flex-col items-center mt-12 relative&quot;&gt;
+                            &lt;div className={`transition-opacity duration-300 absolute -top-12 left-1/2 -translate-x-1/2 ${isRunning ? &#x27;opacity-100&#x27; : &#x27;opacity-0&#x27;}`}&gt;
+                            &lt;div className=&quot;relative&quot;&gt;
+                                &lt;div className=&quot;w-5 h-12 bg-orange-500 rounded-full blur-[3px] animate-pulse absolute top-0 left-1/2 -translate-x-1/2&quot;&gt;&lt;/div&gt;
+                                &lt;div className=&quot;w-3 h-8 bg-yellow-200 rounded-full blur-[1px] absolute top-2 left-1/2 -translate-x-1/2&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                            &lt;/div&gt;
+                            &lt;div className=&quot;w-3 h-4 bg-yellow-900/90 rounded-sm -mt-2 relative z-10&quot;&gt;&lt;/div&gt;
+                            &lt;div className=&quot;w-20 h-14 bg-gray-200 border-2 border-gray-400 rounded-b-xl rounded-t-md shadow-sm relative overflow-hidden flex items-end justify-center z-10&quot;&gt;
+                                &lt;div className=&quot;w-full h-10 bg-blue-300/40&quot;&gt;&lt;/div&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+                        &lt;/div&gt;
+                    &lt;/div&gt;
+
+                    {/* 2. Control panel */}
+                    &lt;div className=&quot;bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4 shrink-0&quot;&gt;
+                        
+                        {/* Liquid and mass settings */}
+                        &lt;div className=&quot;space-y-3&quot;&gt;
+                            {/* Liquid selection */}
+                            &lt;div className=&quot;flex items-center gap-4 bg-gray-50 p-2 rounded border border-gray-200&quot;&gt;
+                                &lt;span className=&quot;text-sm font-bold text-gray-700&quot;&gt;Choose liquid:&lt;/span&gt;
+                                &lt;label className=&quot;flex items-center gap-2 cursor-pointer&quot;&gt;
+                                    &lt;input 
+                                        type=&quot;radio&quot; 
+                                        name=&quot;liquid&quot; 
+                                        value=&quot;water&quot; 
+                                        checked={liquidType === &#x27;water&#x27;}
+                                        /* Only locked while heating */
+                                        disabled={isLocked || isRunning}
+                                        onChange={() =&gt; handleLiquidChange(&#x27;water&#x27;)}
+                                        className=&quot;text-blue-600 focus:ring-blue-500 disabled:opacity-50&quot;
+                                    /&gt;
+                                    &lt;span className={`text-sm ${isRunning ? &#x27;opacity-50&#x27; : &#x27;&#x27;}`}&gt;Water&lt;/span&gt;
+                                &lt;/label&gt;
+                                &lt;label className=&quot;flex items-center gap-2 cursor-pointer&quot;&gt;
+                                    &lt;input 
+                                        type=&quot;radio&quot; 
+                                        name=&quot;liquid&quot; 
+                                        value=&quot;glycerin&quot; 
+                                        checked={liquidType === &#x27;glycerin&#x27;}
+                                        /* Only locked while heating */
+                                        disabled={isLocked || isRunning}
+                                        onChange={() =&gt; handleLiquidChange(&#x27;glycerin&#x27;)}
+                                        className=&quot;text-yellow-600 focus:ring-yellow-500 disabled:opacity-50&quot;
+                                    /&gt;
+                                    &lt;span className={`text-sm ${isRunning ? &#x27;opacity-50&#x27; : &#x27;&#x27;}`}&gt;Glycerin&lt;/span&gt;
+                                &lt;/label&gt;
+                            &lt;/div&gt;
+
+                            {/* Mass and apparatus */}
+                            &lt;div className=&quot;grid grid-cols-2 gap-4&quot;&gt;
+                                &lt;div&gt;
+                                    &lt;label className=&quot;block text-sm font-medium text-gray-700 mb-1&quot;&gt;Liquid Mass (m)&lt;/label&gt;
+                                    &lt;div className=&quot;flex items-center gap-2&quot;&gt;
+                                    &lt;input 
+                                        type=&quot;range&quot; 
+                                        min=&quot;100&quot; 
+                                        max=&quot;500&quot; 
+                                        step=&quot;50&quot; 
+                                        value={mass}
+                                        /* Only locked while heating */
+                                        disabled={isLocked || isRunning}
+                                        onChange={(e) =&gt; setMass(Number(e.target.value))}
+                                        onMouseUp={logMassChange} // record only when mouse is released
+                                        onTouchEnd={logMassChange} // record only when touch ends on mobile
+                                        className=&quot;w-full cursor-pointer accent-emerald-600 disabled:opacity-50&quot;
+                                    /&gt;
+                                    &lt;span className=&quot;text-sm font-mono bg-emerald-50 text-emerald-800 px-2 py-1 rounded font-bold&quot;&gt;{mass} g&lt;/span&gt;
+                                    &lt;/div&gt;
+                                &lt;/div&gt;
+                                
+                                &lt;div className=&quot;hidden&quot;&gt;
+                                    &lt;button 
+                                    onClick={toggleLid}
+                                    /* Only locked while heating */
+                                    disabled={isLocked || isRunning}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm w-full disabled:opacity-50 ${
+                                        hasLid 
+                                        ? &#x27;bg-gray-700 text-white ring-2 ring-gray-400 ring-offset-1&#x27; 
+                                        : &#x27;bg-white text-gray-500 border border-gray-300 hover:bg-gray-100&#x27;
+                                    }`}
+                                    &gt;
+                                    {hasLid ? &#x27;Lid On&#x27; : &#x27;No Lid&#x27;}
+                                    &lt;/button&gt;
+                                &lt;/div&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+
+                        {/* Action buttons */}
+                        &lt;div className=&quot;flex gap-2 pt-2 border-t&quot;&gt;
+                        {!isRunning ? (
+                            &lt;button 
+                            onClick={handleStart}
+                            disabled={isLocked}
+                            className=&quot;flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all&quot;
+                            &gt;
+                            &lt;Play className=&quot;w-5 h-5 fill-current&quot; /&gt; Start Heating
+                            &lt;/button&gt;
+                        ) : (
+                            &lt;button 
+                            onClick={handleStop}
+                            className=&quot;flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all&quot;
+                            &gt;
+                            &lt;Pause className=&quot;w-5 h-5 fill-current&quot; /&gt; Pause Experiment
+                            &lt;/button&gt;
+                        )}
+                        
+                        &lt;button 
+                            onClick={handleRecord}
+                            disabled={isLocked || (!isRunning &amp;&amp; time === 0)}
+                            className=&quot;flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold shadow active:translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed&quot;
+                        &gt;
+                            &lt;Save className=&quot;w-5 h-5&quot; /&gt; Record Data
+                        &lt;/button&gt;
+
+                        &lt;button 
+                            onClick={handleReset}
+                            disabled={isLocked}
+                            className=&quot;flex items-center justify-center px-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold transition-colors&quot;
+                            title=&quot;Reset Experiment&quot;
+                        &gt;
+                            &lt;RotateCcw className=&quot;w-5 h-5&quot; /&gt;
+                        &lt;/button&gt;
+                        &lt;/div&gt;
+
+                        &lt;div className=&quot;flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800&quot; aria-live=&quot;polite&quot;&gt;
+                            &lt;span className=&quot;flex items-center gap-2 font-bold&quot;&gt;&lt;Info className=&quot;w-4 h-4&quot;/&gt;Record Count&lt;/span&gt;
+                            &lt;span className=&quot;font-mono font-bold&quot;&gt;Current {recordCount} / Limit {RECORD_LIMIT}&lt;/span&gt;
+                        &lt;/div&gt;
+
+                        {/* Current status */}
+                        &lt;div className=&quot;grid grid-cols-2 gap-4 text-center bg-gray-50 p-3 rounded-lg border border-gray-200&quot;&gt;
+                        &lt;div&gt;
+                            &lt;div className=&quot;text-xs text-gray-500 uppercase tracking-wider&quot;&gt;Heating Time (t)&lt;/div&gt;
+                            &lt;div className=&quot;text-2xl font-mono font-bold text-gray-800&quot;&gt;{time.toFixed(1)} &lt;span className=&quot;text-sm text-gray-500 font-normal&quot;&gt;s&lt;/span&gt;&lt;/div&gt;
+                        &lt;/div&gt;
+                        &lt;div&gt;
+                            &lt;div className=&quot;text-xs text-gray-500 uppercase tracking-wider&quot;&gt;Current Temperature (T)&lt;/div&gt;
+                            &lt;div className=&quot;text-2xl font-mono font-bold text-red-600&quot;&gt;{temperature.toFixed(2)} &lt;span className=&quot;text-sm text-gray-500 font-normal&quot;&gt;°C&lt;/span&gt;&lt;/div&gt;
+                        &lt;/div&gt;
+                        &lt;/div&gt;
+
+                    &lt;/div&gt;
+                    &lt;/div&gt;
+
+                    {/* Right side: data and charts */}
+                    &lt;div className=&quot;w-1/2 flex flex-col p-4 bg-gray-50 overflow-y-auto&quot;&gt;
+                    
+                    {/* 1. Chart area */}
+                    &lt;div className=&quot;bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-4 flex-none h-[400px] flex flex-col relative&quot; ref={chartAreaRef}&gt;
+                        &lt;div className=&quot;flex justify-between items-center mb-4&quot;&gt;
+                            &lt;h2 className=&quot;text-lg font-bold text-gray-800 flex items-center gap-2&quot;&gt;
+                                &lt;TrendingUp className=&quot;w-5 h-5 text-emerald-600&quot; /&gt;
+                                {liquidType === &#x27;water&#x27; ? &#x27;Water&#x27; : &#x27;Glycerin&#x27;}: Temperature-Time Graph
+                            &lt;/h2&gt;
+                            &lt;div className=&quot;flex items-center gap-2&quot; data-html2canvas-ignore=&quot;true&quot;&gt;
+                                {/* Export image button: shown only when the chart is visible */}
+                                {showChart &amp;&amp; (
+                                    &lt;button 
+                                        onClick={handleExportImage}
+                                        className=&quot;text-xs px-3 py-1.5 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 flex items-center gap-1 transition-all font-medium&quot;
+                                    &gt;
+                                        &lt;DownloadIcon className=&quot;w-3 h-3&quot; /&gt;
+                                        Export Image
+                                    &lt;/button&gt;
+                                )}
+
+                                {/* Linear fit button */}
+                                {showChart &amp;&amp; (
+                                    &lt;button 
+                                        onClick={toggleFit}
+                                        disabled={recordedData.length &lt; 2}
+                                        className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
+                                        showFit 
+                                        ? &#x27;bg-purple-100 text-purple-700 border-purple-300&#x27; 
+                                        : &#x27;bg-white text-gray-500 border-gray-300 hover:bg-gray-50&#x27;
+                                        } disabled:opacity-30`}
+                                    &gt;
+                                        &lt;Calculator className=&quot;w-3 h-3&quot; /&gt;
+                                        {showFit ? &#x27;Hide Fit Line&#x27; : &#x27;Show Linear Fit&#x27;}
+                                    &lt;/button&gt;
+                                )}
+
+                                {/* Show/hide chart button */}
+                                &lt;button 
+                                    onClick={toggleChartVisibility}
+                                    className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all font-medium ${
+                                    showChart 
+                                    ? &#x27;bg-red-50 text-red-600 border-red-200 hover:bg-red-100&#x27; 
+                                    : &#x27;bg-blue-600 text-white border-blue-600 hover:bg-blue-700&#x27;
+                                    }`}
+                                &gt;
+                                    {showChart ? &lt;EyeOff className=&quot;w-3 h-3&quot; /&gt; : &lt;Eye className=&quot;w-3 h-3&quot; /&gt;}
+                                    {showChart ? &#x27;Hide Data Chart&#x27; : &#x27;Show Data Chart&#x27;}
+                                &lt;/button&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+
+                        {/* Chart body area */}
+                        &lt;div className=&quot;flex-1 w-full relative&quot;&gt;
+                            {showChart ? (
+                                &lt;ResponsiveContainer width=&quot;100%&quot; height=&quot;100%&quot;&gt;
+                                &lt;LineChart margin={{ top: 10, right: 30, left: 10, bottom: 20 }}&gt;
+                                    &lt;CartesianGrid strokeDasharray=&quot;3 3&quot; opacity={0.3} /&gt;
+                                    &lt;XAxis 
+                                    dataKey=&quot;time&quot; 
+                                    type=&quot;number&quot; 
+                                    domain={[0, &#x27;auto&#x27;]} 
+                                    label={{ value: &#x27;Time t (s)&#x27;, position: &#x27;bottom&#x27;, offset: 0 }} 
+                                    /&gt;
+                                    &lt;YAxis 
+                                    domain={[20, &#x27;auto&#x27;]} 
+                                    label={{ value: &#x27;Temperature T (°C)&#x27;, angle: -90, position: &#x27;insideLeft&#x27; }} 
+                                    /&gt;
+                                    &lt;Tooltip 
+                                    contentStyle={{ borderRadius: &#x27;8px&#x27;, border: &#x27;none&#x27;, boxShadow: &#x27;0 4px 6px -1px rgb(0 0 0 / 0.1)&#x27; }}
+                                    formatter={(value) =&gt; `${value} °C`}
+                                    labelFormatter={(label) =&gt; `${label} s`}
+                                    /&gt;
+                                    &lt;Legend verticalAlign=&quot;top&quot; height={36}/&gt;
+                                    
+                                    &lt;Line 
+                                    data={recordedData} 
+                                    type=&quot;monotone&quot; 
+                                    dataKey=&quot;temp&quot; 
+                                    name={liquidType === &#x27;water&#x27; ? &#x27;Water (Measured)&#x27; : &#x27;Glycerin (Measured)&#x27;}
+                                    stroke={liquidType === &#x27;water&#x27; ? &#x27;#2563eb&#x27; : &#x27;#d97706&#x27;} 
+                                    strokeWidth={2}
+                                    dot={{ r: 4, fill: liquidType === &#x27;water&#x27; ? &#x27;#2563eb&#x27; : &#x27;#d97706&#x27;, strokeWidth: 2, stroke: &quot;#fff&quot; }}
+                                    activeDot={{ r: 6 }}
+                                    isAnimationActive={false}
+                                    /&gt;
+
+                                    {showFit &amp;&amp; linearFit &amp;&amp; (
+                                    &lt;Line
+                                        data={linearFit.points}
+                                        dataKey=&quot;fitTemp&quot;
+                                        name=&quot;Linear Fit&quot;
+                                        stroke=&quot;#9333ea&quot;
+                                        strokeWidth={2}
+                                        strokeDasharray=&quot;5 5&quot;
+                                        dot={false}
+                                        isAnimationActive={false}
+                                    /&gt;
+                                    )}
+                                &lt;/LineChart&gt;
+                                &lt;/ResponsiveContainer&gt;
+                            ) : (
+                                &lt;div className=&quot;absolute inset-0 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg&quot;&gt;
+                                    &lt;TrendingUp className=&quot;w-12 h-12 text-gray-300 mb-3&quot; /&gt;
+                                    &lt;p className=&quot;text-gray-500 font-medium mb-4&quot;&gt;The chart is hidden. Record data, then click to show it.&lt;/p&gt;
+                                    &lt;button 
+                                        onClick={toggleChartVisibility}
+                                        className=&quot;px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-2 transition-all&quot;
+                                    &gt;
+                                        &lt;Eye className=&quot;w-5 h-5&quot; /&gt; Show Data Chart
+                                    &lt;/button&gt;
+                                &lt;/div&gt;
+                            )}
+                        &lt;/div&gt;
+                        
+                        {/* Fit results overlay */}
+                        {showChart &amp;&amp; showFit &amp;&amp; linearFit &amp;&amp; (
+                        &lt;div className=&quot;absolute top-20 right-14 bg-white/95 backdrop-blur border border-purple-300 p-4 rounded-lg shadow-xl text-purple-900 z-10 w-64&quot;&gt;
+                            &lt;p className=&quot;font-bold border-b border-purple-200 pb-2 mb-2 text-base&quot;&gt;Data Analysis&lt;/p&gt;
+                            &lt;div className=&quot;space-y-1 text-sm&quot;&gt;
+                            &lt;p className=&quot;flex justify-between&quot;&gt;
+                                &lt;span&gt;Slope:&lt;/span&gt;
+                                &lt;span className=&quot;font-mono font-bold&quot;&gt;{linearFit.slope.toFixed(4)}&lt;/span&gt;
+                            &lt;/p&gt;
+                            &lt;/div&gt;
+                        &lt;/div&gt;
+                        )}
+                    &lt;/div&gt;
+
+                    {/* 2. Data Record Table */}
+                    &lt;div className=&quot;bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0&quot;&gt;
+                        &lt;div className=&quot;p-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center shrink-0&quot;&gt;
+                        &lt;span&gt;Data Record Table ({liquidType === &#x27;water&#x27; ? &#x27;Water&#x27; : &#x27;Glycerin&#x27;})&lt;/span&gt;
+                        &lt;span className=&quot;text-xs font-normal text-gray-500 flex items-center gap-1&quot;&gt;
+                            &lt;Info className=&quot;w-3 h-3&quot;/&gt; 
+                            Record Count: {recordCount} / {RECORD_LIMIT} | {isLocked ? &#x27;Locked&#x27; : &#x27;Changing liquid clears the table&#x27;}
+                        &lt;/span&gt;
+                        &lt;/div&gt;
+                        &lt;div className=&quot;overflow-auto flex-1&quot;&gt;
+                        &lt;table className=&quot;w-full text-sm text-left&quot;&gt;
+                            &lt;thead className=&quot;text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10&quot;&gt;
+                            &lt;tr&gt;
+                                &lt;th className=&quot;px-4 py-3&quot;&gt;#&lt;/th&gt;
+                                &lt;th className=&quot;px-4 py-3&quot;&gt;Time (s)&lt;/th&gt;
+                                &lt;th className=&quot;px-4 py-3&quot;&gt;Temperature (°C)&lt;/th&gt;
+                                &lt;th className=&quot;px-4 py-3 text-right&quot;&gt;Temperature Rise Delta T&lt;/th&gt;
+                            &lt;/tr&gt;
+                            &lt;/thead&gt;
+                            &lt;tbody&gt;
+                            {recordedData.length === 0 ? (
+                                &lt;tr&gt;
+                                &lt;td colSpan=&quot;4&quot; className=&quot;text-center py-10 text-gray-400 italic&quot;&gt;
+                                    No data recorded yet...
+                                &lt;/td&gt;
+                                &lt;/tr&gt;
+                            ) : (
+                                recordedData.map((row, index) =&gt; (
+                                &lt;tr key={row.id} className=&quot;bg-white border-b hover:bg-gray-50 transition-colors&quot;&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-medium text-gray-500&quot;&gt;{index + 1}&lt;/td&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-mono&quot;&gt;{row.time.toFixed(1)}&lt;/td&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-mono font-bold text-gray-800&quot;&gt;{row.temp.toFixed(2)}&lt;/td&gt;
+                                    &lt;td className=&quot;px-4 py-2 font-mono text-right text-gray-500&quot;&gt;
+                                    {(row.temp - 25).toFixed(2)}
+                                    &lt;/td&gt;
+                                &lt;/tr&gt;
+                                ))
+                            )}
+                            &lt;/tbody&gt;
+                        &lt;/table&gt;
+                        &lt;/div&gt;
+                    &lt;/div&gt;
+
+                    &lt;/div&gt;
+                &lt;/main&gt;
+                &lt;/div&gt;
+            );
+        };
+
+        // Render component into the DOM
+        const root = ReactDOM.createRoot(document.getElementById(&#x27;root&#x27;));
+        root.render(&lt;SpecificHeatLabAdvanced /&gt;);
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;"></iframe>
+    </div>
+  </div>
+
+  <script>
+    function switchStage(stage) {
+      const waterFrame = document.getElementById('frame-water');
+      const glycerinFrame = document.getElementById('frame-glycerin');
+      const waterTab = document.getElementById('tab-water');
+      const glycerinTab = document.getElementById('tab-glycerin');
+
+      const isWater = stage === 'water';
+      waterFrame.classList.toggle('active', isWater);
+      glycerinFrame.classList.toggle('active', !isWater);
+
+      waterTab.className = isWater ? 'tab-btn active water' : 'tab-btn';
+      glycerinTab.className = !isWater ? 'tab-btn active glycerin' : 'tab-btn';
+
+      if (window.TaskInteractionTracker) {
+        window.TaskInteractionTracker.log('SwitchStage', {
+          stage: isWater ? 'water' : 'glycerin',
+          activeFrame: isWater ? 'frame-water' : 'frame-glycerin'
+        });
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>植物培养虚拟实验室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background-color: #f0fdf4; }
+        .tab-active { border-bottom: 4px solid #16a34a; color: #16a34a; font-weight: bold; background-color: white; }
+        .tab-inactive { color: #6b7280; border-bottom: 4px solid transparent; background-color: #f9fafb; }
+        .tab-inactive:hover { color: #374151; border-bottom: 4px solid #d1d5db; background-color: #f3f4f6; }
+        
+        /* 气候箱滑杆样式 */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: #e5e7eb; 
+            height: 8px; 
+            border-radius: 5px;
+            outline: none;
+            width: 100%;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #16a34a;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        
+        /* 水位滑杆特殊颜色 */
+        input[type=range].water-slider::-webkit-slider-thumb { background: #3b82f6; }
+        
+        .transition-all-fast { transition: all 0.3s ease-in-out; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
+
+    <!-- 顶部标题与页签 -->
+    <div class="max-w-5xl w-full bg-white rounded-t-2xl shadow-md overflow-hidden">
+        <div class="bg-green-700 text-white p-6 text-center relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4=')]"></div>
+            <h1 class="text-3xl font-bold tracking-wider flex items-center justify-center relative z-10">
+                <span class="mr-3 text-4xl">🔬</span> 植物培养虚拟实验室
+            </h1>
+            <p class="mt-2 text-green-100 relative z-10">实体实验前置模拟训练系统</p>
+        </div>
+        
+        <div class="flex flex-row text-lg">
+            <button onclick="switchTab('level1')" id="tab-level1" class="flex-1 py-4 text-center tab-active transition-all-fast focus:outline-none">
+                💧 模式一：水培实验区
+            </button>
+            <button onclick="switchTab('level2')" id="tab-level2" class="flex-1 py-4 text-center tab-inactive transition-all-fast focus:outline-none">
+                🪴 模式二：土培实验区
+            </button>
+        </div>
+    </div>
+
+    <!-- 内容区域 -->
+    <div class="max-w-5xl w-full bg-white rounded-b-2xl shadow-xl p-6 md:p-8 min-h-[650px] relative overflow-hidden">
+        
+        <!-- ==================== 模式一：水培 ==================== -->
+        <div id="level1-content" class="block animate-fade-in">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">室内水培：叶菜类 (如生菜) 培育模拟</h2>
+            <p class="text-gray-600 mb-6 border-l-4 border-blue-500 pl-3">学习目标：掌握室内植物工厂的营养液调配，探究叶菜类特有变因（如抽薹、光抑制）及水位对溶氧的影响。</p>
+
+            <div class="flex flex-col md:flex-row gap-8">
+                <!-- 左侧：视觉化操作区 -->
+                <div class="w-full md:w-1/2 bg-blue-50 rounded-xl p-6 border-2 border-blue-100 flex flex-col items-center justify-center relative overflow-hidden">
+                    <!-- 水培光照效果 (后期出现) -->
+                    <div id="hydro-light-effect" class="absolute top-0 left-0 w-full h-1/2 bg-yellow-300 opacity-0 pointer-events-none transition-all-fast z-0"></div>
+
+                    <!-- 状态指示 -->
+                    <div id="hydro-status" class="absolute top-4 text-sm font-bold text-blue-800 bg-blue-200 px-4 py-1 rounded-full z-10 shadow-sm">
+                        阶段一：初期准备 (处理海绵)
+                    </div>
+
+                    <!-- 模拟水槽与海绵 -->
+                    <div class="mt-10 relative w-64 h-56 border-4 border-gray-300 rounded-b-xl bg-white overflow-hidden flex items-end justify-center shadow-inner z-10">
+                        <!-- 水位线 -->
+                        <div id="hydro-water" class="absolute bottom-0 w-full bg-blue-300 opacity-70 transition-all duration-500 h-0 flex justify-center pt-2">
+                            <span class="text-blue-500 opacity-50 text-xs font-bold tracking-widest hidden" id="water-wave">~ 营养液 ~</span>
+                        </div>
+                        
+                        <!-- 根系视觉反馈 (后期出现) -->
+                        <div id="hydro-roots" class="absolute bottom-0 w-full h-full flex justify-center items-end pb-8 hidden transition-all-fast">
+                            <svg width="40" height="80" viewBox="0 0 40 80" class="text-white opacity-80" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round">
+                                <path d="M20,0 Q15,30 10,60 M20,0 Q20,40 20,75 M20,0 Q25,30 30,50" />
+                            </svg>
+                        </div>
+
+                        <!-- 承载网/定植篮结构 -->
+                        <div class="absolute top-16 w-full border-b-4 border-dashed border-gray-300 z-10"></div>
+
+                        <!-- 海绵 -->
+                        <div id="hydro-sponge" class="w-20 h-16 bg-yellow-100 border-2 border-yellow-300 rounded mb-24 z-20 flex items-center justify-center transition-all duration-500 transform -translate-y-6">
+                            <!-- 种子 -->
+                            <div id="hydro-seed" class="w-3 h-3 bg-amber-800 rounded-full hidden"></div>
+                            <!-- 幼苗 -->
+                            <div id="hydro-plant" class="text-5xl hidden absolute bottom-6 transition-all duration-500 transform origin-bottom">🌱</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：控制面板 -->
+                <div class="w-full md:w-1/2 flex flex-col gap-4 relative min-h-[400px]">
+                    
+                    <!-- ====== 第一阶段：配药面板 ====== -->
+                    <div id="hydro-phase1-panel" class="flex flex-col gap-4 transition-all duration-500">
+                        <!-- 步骤1 -->
+                        <div id="step1-panel" class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                            <h3 class="font-bold text-gray-800 mb-1 flex items-center gap-2"><span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>浸泡海绵</h3>
+                            <button onclick="hydroAction('soak')" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow w-full transition">💧 压入水中排出空气</button>
+                        </div>
+
+                        <!-- 步骤2 -->
+                        <div id="step2-panel" class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm opacity-50 pointer-events-none transition-opacity">
+                            <h3 class="font-bold text-gray-800 mb-1 flex items-center gap-2"><span class="bg-amber-100 text-amber-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>播种置入</h3>
+                            <button onclick="hydroAction('seed')" class="mt-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded shadow w-full transition">🫘 放入种子至定植孔</button>
+                        </div>
+
+                        <!-- 步骤3 -->
+                        <div id="step3-panel" class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm opacity-50 pointer-events-none transition-opacity">
+                            <h3 class="font-bold text-gray-800 mb-1 flex items-center gap-2"><span class="bg-purple-100 text-purple-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>调配营养液</h3>
+                            <p class="text-xs text-gray-500 mb-3 border-l-2 border-purple-300 pl-2">注意化学拮抗：高浓度钙与硫/磷直接混合会产生沉淀，需水作为缓冲。</p>
+                            <div class="flex gap-2">
+                                <button onclick="hydroAction('water')" class="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white px-2 py-2 rounded shadow text-sm">🚰 加清水</button>
+                                <button onclick="hydroAction('addA')" class="flex-1 bg-red-500 hover:bg-red-600 text-white px-2 py-2 rounded shadow text-sm">🧪 A液(含钙)</button>
+                                <button onclick="hydroAction('addB')" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-2 py-2 rounded shadow text-sm">🧪 B液(磷硫)</button>
+                            </div>
+                            <div class="mt-3 text-xs text-gray-600 bg-gray-50 p-2 rounded">配液纪录：<span id="hydro-log" class="font-bold text-gray-800">空</span></div>
+                        </div>
+
+                        <!-- 失败警告区 -->
+                        <div id="hydro-alert" class="hidden bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg shadow-sm animate-fade-in">
+                            <p class="font-bold flex items-center gap-2">⚠️ 化学沉淀警告！</p>
+                            <p class="text-xs mt-1 leading-relaxed">科学原理：高浓度的钙离子（A液）与硫酸根/磷酸根（B液）若未经足量清水稀释而直接混合，会立刻生成不溶于水的硫酸钙或磷酸钙沉淀。植物无法吸收沉淀结晶的养分，实验失败。</p>
+                            <button onclick="resetHydro()" class="mt-3 bg-red-100 text-red-800 px-3 py-1 rounded text-sm hover:bg-red-200 transition">重新开始调配</button>
+                        </div>
+                    </div>
+
+                    <!-- ====== 第二阶段：气候与水位控制面板 (初始隐藏) ====== -->
+                    <div id="hydro-phase2-panel" class="hidden absolute top-0 left-0 w-full bg-white p-5 rounded-xl border border-blue-200 shadow-md animate-fade-in z-20">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 class="font-bold text-blue-800 text-lg">⚙️ 阶段二：环境参数调控</h3>
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">育苗成功解锁</span>
+                        </div>
+
+                        <div class="space-y-5">
+                            <!-- 温度 -->
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <label class="text-sm font-bold text-gray-700">🌡️ 环境温度 (℃)</label>
+                                    <span id="h-temp-val" class="text-red-600 font-bold text-sm">20℃</span>
+                                </div>
+                                <input type="range" id="h-temp-slider" min="5" max="40" value="20" oninput="updateHydroEnvUI()">
+                            </div>
+
+                            <!-- 光照 (Lux) -->
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <label class="text-sm font-bold text-gray-700">💡 LED 光照强度 (24h连续)</label>
+                                    <span id="h-light-val" class="text-yellow-600 font-bold text-sm">10000 Lux</span>
+                                </div>
+                                <input type="range" id="h-light-slider" min="0" max="30000" step="1000" value="10000" oninput="updateHydroEnvUI()">
+                            </div>
+
+                            <!-- 水位 (水培特有核心) -->
+                            <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                <div class="flex justify-between mb-1">
+                                    <label class="text-sm font-bold text-blue-800">🌊 营养液水位 (浸没率)</label>
+                                    <span id="h-water-val" class="text-blue-600 font-bold text-sm">60%</span>
+                                </div>
+                                <input type="range" id="h-water-slider" class="water-slider" min="0" max="100" value="60" oninput="updateHydroEnvUI()">
+                                <p class="text-[10px] text-blue-500 mt-1">提示：影响根系对水分养分的吸收效率与溶氧量(DO)获取。</p>
+                            </div>
+                        </div>
+
+                        <button onclick="simulateHydroClimate()" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-200 flex justify-center items-center gap-2">
+                            ⏳ 模拟运行 14 天
+                        </button>
+                    </div>
+
+                    <!-- 科学反馈区 (绝对定位覆盖在下方) -->
+                    <div id="hydro-science-feedback" class="hidden mt-4 p-4 rounded-lg border bg-white shadow-sm animate-fade-in relative z-10">
+                        <h4 id="hydro-fb-title" class="font-bold mb-2 flex items-center gap-2 text-lg"></h4>
+                        <p id="hydro-fb-desc" class="text-sm text-gray-700 leading-relaxed"></p>
+                        <button onclick="document.getElementById('hydro-science-feedback').classList.add('hidden')" class="absolute top-2 right-2 text-gray-400 hover:text-gray-600">✕</button>
+                    </div>
+
+                    <!-- 🎯 可能的培育结果图鉴 (水培) -->
+                    <div class="mt-8 pt-4 border-t border-gray-200">
+                        <h3 class="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1">🎯 水培可能发生的结果图鉴：</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-md text-xs border border-green-200 shadow-sm">🌿 翠绿爆盆</span>
+                            <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md text-xs border border-yellow-200 shadow-sm">🌾 严重徒长 (光不足)</span>
+                            <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded-md text-xs border border-orange-200 shadow-sm">🔥 生理疲劳 (光过载)</span>
+                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs border border-blue-200 shadow-sm">🧊 低温停滞</span>
+                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded-md text-xs border border-red-200 shadow-sm">🥀 抽薹 / 热胁迫</span>
+                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-md text-xs border border-purple-200 shadow-sm">🦠 根腐病 (缺氧)</span>
+                            <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded-md text-xs border border-gray-200 shadow-sm">🍂 水肥胁迫 (干旱)</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 模式二：土培 ==================== -->
+        <div id="level2-content" class="hidden animate-fade-in">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">室内土培：叶菜类气候变因测试</h2>
+            <p class="text-gray-600 mb-6 border-l-4 border-green-500 pl-3">学习目标：探究温度、湿度、LED光照对室内盆栽叶菜类生理机制（如蒸腾拉力、心腐病、避荫反应）的具体影响。</p>
+
+            <div class="flex flex-col md:flex-row gap-8">
+                <!-- 左侧：视觉展示区 -->
+                <div class="w-full md:w-1/2 bg-gray-900 rounded-xl p-8 flex flex-col items-center justify-center relative border-4 border-gray-800 shadow-inner overflow-hidden">
+                    <!-- 光照效果 -->
+                    <div id="soil-light-effect" class="absolute top-0 left-0 w-full h-1/2 bg-yellow-300 opacity-20 pointer-events-none transition-all-fast"></div>
+
+                    <!-- 植物展示区 -->
+                    <div class="h-48 flex items-end justify-center z-10 w-full mb-2">
+                        <div id="soil-plant-container" class="text-8xl text-center transition-all duration-500 transform scale-75 origin-bottom">
+                            🌱
+                        </div>
+                    </div>
+
+                    <!-- 盆栽/土壤 -->
+                    <div class="w-40 h-20 bg-amber-900 rounded-b-xl border-t-8 border-amber-950 relative flex justify-center z-10 shadow-lg">
+                        <div class="absolute -top-3 text-xs text-white bg-gray-700 px-2 py-1 rounded">混合培养土</div>
+                    </div>
+
+                    <!-- 状态标签 -->
+                    <div id="soil-status-badge" class="mt-6 px-4 py-2 rounded-full text-sm font-bold bg-gray-700 text-white z-10 shadow-md">
+                        等待设定参数...
+                    </div>
+                </div>
+
+                <!-- 右侧：控制面板 -->
+                <div class="w-full md:w-1/2 flex flex-col justify-between">
+                    <div class="space-y-6 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <!-- 温度 -->
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="font-bold text-gray-700 text-sm">🌡️ 环境温度 (℃)</label>
+                                <span id="s-temp-val" class="text-red-600 font-bold">20℃</span>
+                            </div>
+                            <input type="range" id="s-temp-slider" min="5" max="40" value="20" oninput="updateSoilUI()">
+                        </div>
+
+                        <!-- 湿度 (变更为土壤湿度) -->
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="font-bold text-gray-700 text-sm">💧 土壤湿度 (%)</label>
+                                <span id="s-humid-val" class="text-blue-600 font-bold">60%</span>
+                            </div>
+                            <input type="range" id="s-humid-slider" min="20" max="100" value="60" oninput="updateSoilUI()">
+                        </div>
+
+                        <!-- 光照 (Lux) -->
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="font-bold text-gray-700 text-sm">💡 LED 光照强度 (24h连续)</label>
+                                <span id="s-light-val" class="text-yellow-600 font-bold">10000 Lux</span>
+                            </div>
+                            <input type="range" id="s-light-slider" min="0" max="30000" step="1000" value="10000" oninput="updateSoilUI()">
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button onclick="simulateSoilClimate()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition duration-200 flex justify-center items-center gap-2">
+                            ⏳ 模拟运行 14 天
+                        </button>
+                        
+                        <!-- 科学文献反馈框 -->
+                        <div id="soil-science-feedback" class="mt-4 p-4 rounded-lg border hidden bg-white shadow-sm">
+                            <h4 id="soil-fb-title" class="font-bold mb-2 flex items-center gap-2"></h4>
+                            <p id="soil-fb-desc" class="text-sm text-gray-700 leading-relaxed"></p>
+                        </div>
+                    </div>
+
+                    <!-- 🎯 可能的培育结果图鉴 (土培) -->
+                    <div class="mt-8 pt-4 border-t border-gray-200">
+                        <h3 class="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1">🎯 土培可能发生的结果图鉴：</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-md text-xs border border-green-200 shadow-sm">🌿 翠绿茂盛</span>
+                            <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md text-xs border border-yellow-200 shadow-sm">🌾 徒长 (光不足)</span>
+                            <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded-md text-xs border border-orange-200 shadow-sm">🔥 疲劳 / 叶片黄化</span>
+                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs border border-blue-200 shadow-sm">🧊 冷害</span>
+                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded-md text-xs border border-red-200 shadow-sm">🥀 抽薹 / 叶缘焦枯</span>
+                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-md text-xs border border-purple-200 shadow-sm">🦠 心腐病 / 烂根</span>
+                            <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded-md text-xs border border-gray-200 shadow-sm">🍂 物理干旱萎蔫</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript 逻辑 -->
+    <script>
+        // ==================== 页签切换逻辑 ====================
+        function switchTab(tab) {
+            const l1Btn = document.getElementById('tab-level1');
+            const l2Btn = document.getElementById('tab-level2');
+            const l1Content = document.getElementById('level1-content');
+            const l2Content = document.getElementById('level2-content');
+
+            if (tab === 'level1') {
+                l1Btn.className = "flex-1 py-4 text-center tab-active transition-all-fast focus:outline-none";
+                l2Btn.className = "flex-1 py-4 text-center tab-inactive transition-all-fast focus:outline-none";
+                l1Content.classList.remove('hidden');
+                l2Content.classList.add('hidden');
+            } else {
+                l2Btn.className = "flex-1 py-4 text-center tab-active transition-all-fast focus:outline-none";
+                l1Btn.className = "flex-1 py-4 text-center tab-inactive transition-all-fast focus:outline-none";
+                l2Content.classList.remove('hidden');
+                l1Content.classList.add('hidden');
+            }
+        }
+
+        // ==================== 模式一：水培核心逻辑 ====================
+        let hydroState = {
+            step: 1,
+            tankLog: [],
+            waterAmount: 0,
+            hasA: false,
+            hasB: false,
+            failed: false,
+            phase2: false // 是否进入后期参数调整阶段
+        };
+
+        function hydroAction(action) {
+            if (hydroState.failed || hydroState.phase2) return;
+
+            const sponge = document.getElementById('hydro-sponge');
+            const water = document.getElementById('hydro-water');
+            const seed = document.getElementById('hydro-seed');
+            const plant = document.getElementById('hydro-plant');
+            const status = document.getElementById('hydro-status');
+            const logDisplay = document.getElementById('hydro-log');
+
+            // 步骤1：泡海绵
+            if (hydroState.step === 1 && action === 'soak') {
+                sponge.classList.remove('-translate-y-6'); 
+                sponge.classList.add('bg-yellow-300', 'translate-y-4'); 
+                water.style.height = '15%'; // 给一点底部的水
+                
+                document.getElementById('step1-panel').classList.add('opacity-50', 'pointer-events-none');
+                document.getElementById('step2-panel').classList.remove('opacity-50', 'pointer-events-none');
+                status.innerText = "阶段一：播种置入";
+                hydroState.step = 2;
+            }
+            // 步骤2：播种
+            else if (hydroState.step === 2 && action === 'seed') {
+                seed.classList.remove('hidden');
+                document.getElementById('step2-panel').classList.add('opacity-50', 'pointer-events-none');
+                document.getElementById('step3-panel').classList.remove('opacity-50', 'pointer-events-none');
+                status.innerText = "阶段一：调配营养液";
+                hydroState.step = 3;
+            }
+            // 步骤3：调配营养液
+            else if (hydroState.step === 3) {
+                if (action === 'water') {
+                    hydroState.waterAmount++;
+                    hydroState.tankLog.push('清水');
+                    // 每次加水提升水位，最多加满到海绵高度
+                    let currentHeight = 15 + (hydroState.waterAmount * 15);
+                    if(currentHeight > 60) currentHeight = 60; 
+                    water.style.height = `${currentHeight}%`; 
+                } else if (action === 'addA') {
+                    hydroState.hasA = true;
+                    hydroState.tankLog.push('A液');
+                } else if (action === 'addB') {
+                    hydroState.hasB = true;
+                    hydroState.tankLog.push('B液');
+                }
+
+                logDisplay.innerText = hydroState.tankLog.join(' ➔ ');
+
+                // 化学沉淀检查 (A与B无足够水缓冲直接混合)
+                if (hydroState.hasA && hydroState.hasB) {
+                    const idxA = hydroState.tankLog.indexOf('A液');
+                    const idxB = hydroState.tankLog.indexOf('B液');
+                    let directMix = Math.abs(idxA - idxB) === 1;
+                    
+                    if (directMix || hydroState.waterAmount < 2) {
+                        // 实验失败
+                        hydroState.failed = true;
+                        water.classList.remove('bg-blue-300', 'opacity-70');
+                        water.classList.add('bg-gray-400', 'opacity-90'); // 混浊沉淀
+                        document.getElementById('hydro-alert').classList.remove('hidden');
+                        status.innerText = "调配失败";
+                        status.className = "absolute top-4 text-sm font-bold text-red-800 bg-red-200 px-4 py-1 rounded-full z-10";
+                        return;
+                    } else {
+                        // 调配成功，进入阶段二 (参数控制)
+                        hydroState.phase2 = true;
+                        seed.classList.add('hidden');
+                        plant.classList.remove('hidden'); // 初生幼苗
+                        document.getElementById('water-wave').classList.remove('hidden');
+                        document.getElementById('hydro-roots').classList.remove('hidden'); // 长出细根
+                        
+                        status.innerText = "阶段二：环境控制与生长追踪";
+                        status.className = "absolute top-4 text-sm font-bold text-white bg-green-600 px-4 py-1 rounded-full z-10 shadow-md";
+                        
+                        // 隐藏第一阶段面板，平滑显示第二阶段面板
+                        document.getElementById('hydro-phase1-panel').style.opacity = '0';
+                        setTimeout(() => {
+                            document.getElementById('hydro-phase1-panel').classList.add('hidden');
+                            document.getElementById('hydro-phase2-panel').classList.remove('hidden');
+                            
+                            // 同步当前水槽水位到滑杆
+                            let initWaterLvl = Math.min(15 + (hydroState.waterAmount * 15), 60);
+                            document.getElementById('h-water-slider').value = initWaterLvl;
+                            updateHydroEnvUI();
+                        }, 500);
+                    }
+                }
+            }
+        }
+
+        function resetHydro() {
+            hydroState = { step: 1, tankLog: [], waterAmount: 0, hasA: false, hasB: false, failed: false, phase2: false };
+            
+            document.getElementById('hydro-sponge').className = "w-20 h-16 bg-yellow-100 border-2 border-yellow-300 rounded mb-24 z-20 flex items-center justify-center transition-all duration-500 transform -translate-y-6";
+            
+            const water = document.getElementById('hydro-water');
+            water.style.height = '0%';
+            water.className = "absolute bottom-0 w-full bg-blue-300 opacity-70 transition-all duration-500 h-0 flex justify-center pt-2";
+            
+            document.getElementById('hydro-seed').classList.add('hidden');
+            document.getElementById('hydro-plant').classList.add('hidden');
+            document.getElementById('hydro-plant').className = "text-5xl hidden absolute bottom-6 transition-all duration-500 transform origin-bottom";
+            document.getElementById('water-wave').classList.add('hidden');
+            document.getElementById('hydro-roots').classList.add('hidden');
+            
+            document.getElementById('step1-panel').className = "bg-white p-4 rounded-lg border border-gray-200 shadow-sm";
+            document.getElementById('step2-panel').className = "bg-white p-4 rounded-lg border border-gray-200 shadow-sm opacity-50 pointer-events-none transition-opacity";
+            document.getElementById('step3-panel').className = "bg-white p-4 rounded-lg border border-gray-200 shadow-sm opacity-50 pointer-events-none transition-opacity";
+            
+            document.getElementById('hydro-log').innerText = "空";
+            document.getElementById('hydro-alert').classList.add('hidden');
+            
+            document.getElementById('hydro-phase1-panel').classList.remove('hidden');
+            document.getElementById('hydro-phase1-panel').style.opacity = '1';
+            document.getElementById('hydro-phase2-panel').classList.add('hidden');
+            document.getElementById('hydro-science-feedback').classList.add('hidden');
+            document.getElementById('hydro-light-effect').style.opacity = 0;
+            
+            const status = document.getElementById('hydro-status');
+            status.innerText = "阶段一：初期准备 (处理海绵)";
+            status.className = "absolute top-4 text-sm font-bold text-blue-800 bg-blue-200 px-4 py-1 rounded-full z-10 shadow-sm";
+        }
+
+        // ==================== 阶段二：水培参数调节逻辑 ====================
+        function updateHydroEnvUI() {
+            const temp = document.getElementById('h-temp-slider').value;
+            const light = document.getElementById('h-light-slider').value;
+            const waterLvl = document.getElementById('h-water-slider').value;
+
+            document.getElementById('h-temp-val').innerText = temp + '℃';
+            document.getElementById('h-light-val').innerText = light + ' Lux';
+            document.getElementById('h-water-val').innerText = waterLvl + '%';
+
+            // 光照即时视觉 (最大值 30000 对应 opacity 0.4)
+            document.getElementById('hydro-light-effect').style.opacity = light / 30000 * 0.4;
+            
+            // 水位即时视觉反馈 (0-100% 对应到视觉 div 的 height 0-100%)
+            // 由于容器有设计结构，这里映射让 100% 刚好淹过海绵底部
+            const mappedHeight = (waterLvl / 100) * 85; 
+            document.getElementById('hydro-water').style.height = `${mappedHeight}%`;
+        }
+
+        function simulateHydroClimate() {
+            const temp = parseInt(document.getElementById('h-temp-slider').value);
+            const light = parseInt(document.getElementById('h-light-slider').value);
+            const waterLvl = parseInt(document.getElementById('h-water-slider').value);
+            
+            const plant = document.getElementById('hydro-plant');
+            const roots = document.getElementById('hydro-roots');
+            const statusBadge = document.getElementById('hydro-status');
+            const feedbackBox = document.getElementById('hydro-science-feedback');
+            const fbTitle = document.getElementById('hydro-fb-title');
+            const fbDesc = document.getElementById('hydro-fb-desc');
+
+            // 动画重置重载感
+            plant.className = 'text-5xl absolute bottom-6 transition-all duration-500 transform origin-bottom scale-90 opacity-80';
+            statusBadge.innerText = '时间加速运算中...';
+            statusBadge.className = 'absolute top-4 text-sm font-bold bg-yellow-500 text-white px-4 py-1 rounded-full z-10 shadow';
+            feedbackBox.classList.add('hidden');
+
+            setTimeout(() => {
+                let rEmoji = '', rStatus = '', rDesc = '', rColor = '', rBorder = '';
+                let plantStyle = 'text-7xl absolute bottom-6 transition-all duration-700 transform origin-bottom ';
+
+                // 室内叶菜类生理评估逻辑
+                if (temp < 10) {
+                    rEmoji = '🧊'; rStatus = '低温生长停滞';
+                    rColor = 'bg-blue-500'; rBorder = 'border-blue-300 bg-blue-50 text-blue-900';
+                    plantStyle += 'scale-75 brightness-75';
+                    rDesc = `🌡️ <b>生理机制：</b> 叶菜类虽偏好冷凉，但低于 10℃ 会使细胞酶活性过低，养分吸收（特别是磷）受阻，导致生长近乎停滞，叶片可能发紫或发黄。`;
+                } else if (temp > 28) {
+                    rEmoji = '🥀'; rStatus = '抽薹 (Bolting) / 热胁迫';
+                    rColor = 'bg-red-500'; rBorder = 'border-red-300 bg-red-50 text-red-900';
+                    plantStyle += 'scale-y-150 scale-x-90 opacity-90'; // 模拟抽薹变高
+                    rDesc = `🌡️ <b>生理机制：</b> 温度高于 28℃ 对生菜等叶菜类是致命伤。植物会提早进入生殖生长，发生<b>“抽薹 (Bolting)”</b>，茎部快速抽长开花，叶片变苦无法食用。同时高温会降低水中溶氧，极易引发烂根。`;
+                } else if (light < 4000) {
+                    rEmoji = '🌾'; rStatus = '严重徒长 (DLI不足)';
+                    rColor = 'bg-yellow-600'; rBorder = 'border-yellow-300 bg-yellow-50 text-yellow-900';
+                    plantStyle += 'scale-y-150 scale-x-75 -translate-y-4';
+                    rDesc = `☀️ <b>生理机制：</b> 在 <b>24小时连续光照</b> 条件下，若光强度仍低于 4000 Lux，每日光积分 (DLI) 依旧无法达标。植物为寻找光源发生避荫反应，茎秆细长脆弱。`;
+                } else if (light > 20000) {
+                    rEmoji = '🔥'; rStatus = '生理疲劳 / 光抑制';
+                    rColor = 'bg-orange-600'; rBorder = 'border-orange-300 bg-orange-50 text-orange-900';
+                    plantStyle += 'scale-110 brightness-75';
+                    rDesc = `☀️ <b>生理机制：</b> <b>无暗期 (Dark period) 的 24小时连续照射</b> 极度考验植物耐受力。超过 20000 Lux 连续照射会导致 DLI 严重超标。光合机构因无法休息修复而产生过多自由基（光抑制），提早老化发黄。`;
+                } else if (waterLvl > 85) {
+                    rEmoji = '🦠'; rStatus = '根腐病 (缺氧烂根)';
+                    rColor = 'bg-purple-600'; rBorder = 'border-purple-300 bg-purple-50 text-purple-900';
+                    plantStyle += 'scale-75 brightness-50';
+                    roots.innerHTML = `<svg width="40" height="80" viewBox="0 0 40 80" class="text-purple-900 opacity-90" stroke="currentColor" fill="none" stroke-width="3" stroke-linecap="round"><path d="M20,0 Q18,30 15,40 M20,0 Q22,20 22,35" /></svg>`;
+                    rDesc = `🌊 <b>生理机制：</b> 水位过高（全淹没）阻绝了空气。深层根系<b>极度缺氧(Hypoxia)</b>，被迫进行无氧呼吸产生酒精毒害细胞。缺氧环境更是病原体的温床，导致根系发黑腐烂(Root rot)。`;
+                } else if (waterLvl < 30) {
+                    rEmoji = '🍂'; rStatus = '水肥胁迫 (干旱萎蔫)';
+                    rColor = 'bg-orange-500'; rBorder = 'border-orange-300 bg-orange-50 text-orange-900';
+                    plantStyle += 'scale-75 translate-y-4';
+                    roots.innerHTML = `<svg width="40" height="50" viewBox="0 0 40 50" class="text-white opacity-50" stroke="currentColor" fill="none" stroke-width="1" stroke-linecap="round"><path d="M20,0 Q18,20 18,30 M20,0 Q22,20 22,30" /></svg>`;
+                    rDesc = `📉 <b>生理机制：</b> 水位过低，根系无法有效接触液面。叶菜类含水量极高，无法吸收水分与矿质离子会面临严重物理干旱。气孔被迫关闭阻断二氧化碳进入，光合作用停止，最终萎蔫。`;
+                } else {
+                    rEmoji = '🌿'; rStatus = '翠绿爆盆 (生长完美)';
+                    rColor = 'bg-green-600'; rBorder = 'border-green-300 bg-green-50 text-green-900';
+                    plantStyle += 'scale-125';
+                    roots.innerHTML = `<svg width="60" height="100" viewBox="0 0 60 100" class="text-white opacity-90" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M30,0 Q20,40 10,90 M30,0 Q30,50 30,95 M30,0 Q40,40 50,90 M30,10 Q15,30 5,60 M30,10 Q45,30 55,60" /></svg>`; 
+                    
+                    rDesc = `✨ <b>科学分析：</b> 培育极其成功！<br>• <b>温湿度与 24h光照（${light} Lux）</b>配合完美。由于是连续光照，适中的照度即可积累足够的 DLI（每日光积分）！<br>• <b>水位适中(${waterLvl}%)</b>促使上层根系形成气生根，完美解决人工环境的缺氧难题，收成翠绿鲜甜！`;
+                }
+
+                // 更新画面状态
+                plant.innerText = (rEmoji === '🦠' || rEmoji === '🍂' || rEmoji === '🧊' || rEmoji === '🥀' || rEmoji === '🔥') ? '🥀' : (rEmoji === '🌾' ? '🌱' : '🌿');
+                plant.className = plantStyle;
+                
+                statusBadge.innerText = rStatus;
+                statusBadge.className = `absolute top-4 text-sm font-bold text-white px-4 py-1 rounded-full z-10 shadow-md ${rColor}`;
+                
+                feedbackBox.className = `mt-4 p-4 rounded-lg border ${rBorder} block animate-fade-in relative z-10`;
+                fbTitle.innerHTML = `<span class="text-2xl">${rEmoji}</span> ${rStatus}`;
+                fbDesc.innerHTML = rDesc;
+
+            }, 1000);
+        }
+
+        // ==================== 模式二：土培逻辑 ====================
+        function updateSoilUI() {
+            const temp = document.getElementById('s-temp-slider').value;
+            const humid = document.getElementById('s-humid-slider').value;
+            const light = document.getElementById('s-light-slider').value;
+
+            document.getElementById('s-temp-val').innerText = temp + '℃';
+            document.getElementById('s-humid-val').innerText = humid + '%';
+            document.getElementById('s-light-val').innerText = light + ' Lux';
+
+            // 光照即时视觉 (最大值 30000 对应 opacity 0.5)
+            document.getElementById('soil-light-effect').style.opacity = light / 30000 * 0.5;
+        }
+
+        function simulateSoilClimate() {
+            const temp = parseInt(document.getElementById('s-temp-slider').value);
+            const humid = parseInt(document.getElementById('s-humid-slider').value);
+            const light = parseInt(document.getElementById('s-light-slider').value);
+            
+            const plantContainer = document.getElementById('soil-plant-container');
+            const statusBadge = document.getElementById('soil-status-badge');
+            const feedbackBox = document.getElementById('soil-science-feedback');
+            const fbTitle = document.getElementById('soil-fb-title');
+            const fbDesc = document.getElementById('soil-fb-desc');
+
+            plantContainer.innerHTML = '🌱';
+            plantContainer.className = 'text-8xl text-center transition-all duration-500 transform scale-50 opacity-100 origin-bottom';
+            statusBadge.innerText = '时间加速运算中...';
+            statusBadge.className = 'mt-6 px-4 py-2 rounded-full text-sm font-bold bg-yellow-500 text-white z-10';
+            feedbackBox.classList.add('hidden');
+
+            setTimeout(() => {
+                let rEmoji = '', rStatus = '', rDesc = '', rColor = '', rBorder = '';
+
+                if (temp < 10) {
+                    rEmoji = '🧊'; rStatus = '冷害 (Chilling Injury)';
+                    rColor = 'bg-blue-500'; rBorder = 'border-blue-300 bg-blue-50 text-blue-900';
+                    rDesc = `🌡️ <b>生理机制：</b> 低温使细胞膜脂质流动性下降，酶活性降低，导致室内叶菜吸水困难与代谢停滞。`;
+                } else if (temp > 28) {
+                    rEmoji = '🥀'; rStatus = '抽薹 (Bolting) / 叶缘焦枯';
+                    rColor = 'bg-red-500'; rBorder = 'border-red-300 bg-red-50 text-red-900';
+                    plantContainer.classList.add('opacity-80', 'scale-y-150', 'scale-x-90');
+                    rDesc = `🌡️ <b>生理机制：</b> 温度高于 28℃ 会刺激叶菜类（如生菜、菠菜）提早“抽薹”开花，消耗大量养分且口感变苦。同时高温加速蒸腾，若根系吸水不及会导致叶缘细胞缺水坏死。`;
+                } else if (humid < 40) {
+                    rEmoji = '🍂'; rStatus = '水分缺乏 (物理干旱)';
+                    rColor = 'bg-orange-500'; rBorder = 'border-orange-300 bg-orange-50 text-orange-900';
+                    plantContainer.classList.add('scale-75');
+                    rDesc = `💧 <b>生理机制：</b> 土壤过于干燥，导致失水过快。保卫细胞失去膨压关闭气孔，完全阻断了碳固定过程，植物萎蔫。`;
+                } else if (humid > 80) {
+                    rEmoji = '🦠'; rStatus = '生理缺钙 (心腐病) / 真菌感染';
+                    rColor = 'bg-purple-600'; rBorder = 'border-purple-300 bg-purple-50 text-purple-900';
+                    rDesc = `💧 <b>生理机制：</b> 土壤湿度过高会抑制植物的根系呼吸与水分吸收，并且土壤过度潮湿导致蒸腾拉力不足，钙离子无法被运送到心叶，引发致命的“心腐病 (Tip burn)”。同时高湿极易引发灰霉病或烂根。`;
+                } else if (light < 4000) {
+                    rEmoji = '🌾'; rStatus = '徒长 (DLI不足)';
+                    rColor = 'bg-yellow-600'; rBorder = 'border-yellow-300 bg-yellow-50 text-yellow-900';
+                    plantContainer.classList.add('scale-y-125', 'scale-x-75', '-translate-y-4');
+                    rDesc = `☀️ <b>生理机制：</b> 即使是 24 小时连续光照，若低于 4000 Lux 总辐射量依然不足。光敏素侦测到弱光促使生长素积累，驱动茎干极度纵向伸长以寻找光源，植株细弱。`;
+                } else if (light > 20000) {
+                    rEmoji = '🔥'; rStatus = '生理疲劳 / 叶片黄化';
+                    rColor = 'bg-orange-600'; rBorder = 'border-orange-300 bg-orange-50 text-orange-900';
+                    plantContainer.classList.add('scale-110', 'brightness-75');
+                    rDesc = `☀️ <b>生理机制：</b> <b>24小时连续光照缺少暗期</b>。超过 20000 Lux 连续照射会使 DLI 过载，超出室内叶菜类光合系统的负荷，产生自由基破坏叶绿体（光抑制），导致叶片提早受损。`;
+                } else {
+                    rEmoji = '🌿'; rStatus = '翠绿茂盛 (生长完美)';
+                    rColor = 'bg-green-500'; rBorder = 'border-green-300 bg-green-50 text-green-900';
+                    plantContainer.classList.add('scale-110');
+                    
+                    rDesc = `✨ <b>科学分析：</b> 环境条件极佳！<br>• 温湿度适宜，维持了优秀的蒸腾拉力。<br>• <b>最佳化的 24h 连续光照（${light} Lux）</b>。植物在无间断的适中光照下积累了完美的 DLI，叶片宽大翠绿！`;
+                }
+
+                plantContainer.innerHTML = (rEmoji==='🌾')?'🌱':(rEmoji==='🔥'?'🥀':rEmoji);
+                statusBadge.innerText = rStatus;
+                statusBadge.className = `mt-6 px-4 py-2 rounded-full text-sm font-bold text-white z-10 ${rColor}`;
+                
+                feedbackBox.className = `mt-4 p-4 rounded-lg border ${rBorder} block animate-fade-in`;
+                fbTitle.innerHTML = `<span class="text-xl">${rEmoji}</span> ${rStatus}`;
+                fbDesc.innerHTML = rDesc;
+
+            }, 800);
+        }
+
+        // 初始化
+        updateSoilUI();
+    </script>
+</body>
+</html>

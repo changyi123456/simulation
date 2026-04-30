@@ -563,7 +563,7 @@
         //              此處 K1, K2 已隱含吸收了 (1000·A0/g) 的轉換係數，
         //              使 m_calc 可直接與「克」對應，便於對應測驗題目區間。
         // ==========================================
-        const RubberBandExperiment = () => {
+        const RubberBandExperiment = ({ tabId = 2 }) => {
             const L0 = 6.0;
             const PAN_MASS = 100;
             const MAX_TOTAL_MASS = 1000;
@@ -585,7 +585,7 @@
             // 一次性記錄：實驗達 30 次上限的瞬間（控制台鎖定時刻）
             useEffect(() => {
                 if (totalRecordCount === 30) {
-                    InteractionLogger.log('ExperimentLocked_Rubber', { totalRecordCount });
+                    InteractionLogger.log('ExperimentLocked_Rubber', { totalRecordCount, tabId });
                 }
             }, [totalRecordCount]);
 
@@ -632,7 +632,7 @@
 
             const calculateTrendline = () => {
                 if (history.length < 2) {
-                    InteractionLogger.log('TrendlineInsufficient_Rubber', { currentCount: history.length });
+                    InteractionLogger.log('TrendlineInsufficient_Rubber', { currentCount: history.length, tabId });
                     showAlert("數據不足", "請至少記錄兩個數據點以進行分析。");
                     return;
                 }
@@ -647,7 +647,7 @@
                 const maxLen = Math.max(...history.map(d=>d.totalLength));
                 const x1 = Math.max(0, minLen*0.9), y1 = slope*x1 + intercept;
                 const x2 = maxLen*1.15,             y2 = slope*x2 + intercept;
-                InteractionLogger.log('CalculateTrendline_Rubber', { slope: slope.toFixed(2) });
+                InteractionLogger.log('CalculateTrendline_Rubber', { slope: slope.toFixed(2), tabId });
                 setTrendline({
                     slope: slope.toFixed(2),
                     points: [
@@ -658,25 +658,25 @@
             };
 
             const clearData = () => showConfirm("清除確認", "確定要清除目前的數據圖表嗎？\n(注意：全域的 30 次實驗上限不會因此歸零)",
-                () => { setHistory([]); setTrendline(null); InteractionLogger.log('ClearDataHistory_Rubber'); });
+                () => { setHistory([]); setTrendline(null); InteractionLogger.log('ClearDataHistory_Rubber', { tabId }); });
 
             const addWeight = (amount) => {
                 if (isExperimentLocked) {
-                    InteractionLogger.log('AttemptedWhileLocked_Rubber', { action: 'addWeight', amount });
+                    InteractionLogger.log('AttemptedWhileLocked_Rubber', { action: 'addWeight', amount, tabId });
                     return;
                 }
                 if (totalMass + amount > MAX_TOTAL_MASS) {
                     showAlert("超重警告", `為了器材安全，本實驗總承重限制為 ${MAX_TOTAL_MASS}g。`);
-                    InteractionLogger.log('WeightLimitExceeded_Rubber', { attemptedMass: totalMass + amount });
+                    InteractionLogger.log('WeightLimitExceeded_Rubber', { attemptedMass: totalMass + amount, tabId });
                     return;
                 }
                 setAddedMass(prev => prev + amount);
-                InteractionLogger.log('AddWeight_Rubber', { amount, newTotalMass: totalMass + amount });
+                InteractionLogger.log('AddWeight_Rubber', { amount, newTotalMass: totalMass + amount, tabId });
             };
 
             const recordData = () => {
                 if (isExperimentLocked) {
-                    InteractionLogger.log('AttemptedWhileLocked_Rubber', { action: 'recordData' });
+                    InteractionLogger.log('AttemptedWhileLocked_Rubber', { action: 'recordData', tabId });
                     return;
                 }
                 const exists = history.some(d => d.mass === totalMass);
@@ -684,14 +684,14 @@
                     const newLength = parseFloat(currentLength.toFixed(2));
                     setHistory(prev => [...prev, { mass: totalMass, totalLength: newLength }].sort((a,b)=>a.mass-b.mass));
                     setTotalRecordCount(prev => prev + 1);
-                    InteractionLogger.log('RecordDataPoint_Rubber', { mass: totalMass, totalLength: newLength });
+                    InteractionLogger.log('RecordDataPoint_Rubber', { mass: totalMass, totalLength: newLength, tabId });
                 } else {
                     showAlert("重複記錄", "這個質量的數據已經記錄過囉！");
                 }
             };
 
             const exportData = () => {
-                InteractionLogger.log('ExportDataCSV_Rubber');
+                InteractionLogger.log('ExportDataCSV_Rubber', { tabId });
                 const csvContent = "data:text/csv;charset=utf-8,﻿" + "質量 m (g),橡皮筋全長 L (cm)\n"
                     + history.map(r => `${r.mass},${r.totalLength}`).join("\n");
                 const link = document.createElement("a");
@@ -808,7 +808,7 @@
                                     <span className={`ml-auto text-[10px] font-bold ${isExperimentLocked?'text-red-500':'text-slate-500'}`}>已記錄: {totalRecordCount}/30</span>
                                 </h3>
                                 <div className="flex gap-2 mb-2">
-                                    <button onClick={() => { const ns = !isPanAttached; setIsPanAttached(ns); InteractionLogger.log('TogglePan_Rubber', { isAttached: ns }); }}
+                                    <button onClick={() => { const ns = !isPanAttached; setIsPanAttached(ns); InteractionLogger.log('TogglePan_Rubber', { isAttached: ns, tabId }); }}
                                         disabled={isExperimentLocked}
                                         className={`btn-tap flex-1 py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${isPanAttached?'bg-amber-100 text-amber-800 active:bg-amber-200':'bg-emerald-100 text-emerald-800 active:bg-emerald-200'}`}>
                                         <Icon name="anchor" size={16}/>{isPanAttached?'取下秤盤':'掛上秤盤 (100g)'}
@@ -824,7 +824,7 @@
                                     ))}
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setAddedMass(0); InteractionLogger.log('ClearWeight_Rubber'); }}
+                                    <button onClick={() => { setAddedMass(0); InteractionLogger.log('ClearWeight_Rubber', { tabId }); }}
                                         disabled={!isPanAttached || addedMass === 0 || isExperimentLocked}
                                         className="btn-tap flex-1 bg-slate-100 active:bg-slate-200 text-slate-600 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                                         清空砝碼
@@ -927,21 +927,28 @@
                                     className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='spring'?'border-blue-500 text-blue-600 bg-blue-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>
                                     第一部分：理想彈簧 (Hooke)
                                 </button>
-                                <button onClick={() => handleTabSwitch('rubber')}
-                                    className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='rubber'?'border-emerald-500 text-emerald-600 bg-emerald-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>
-                                    第二部分：橡皮筋 (Non-Linear)
+                                <button onClick={() => handleTabSwitch('rubber2')}
+                                    className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='rubber2'?'border-emerald-500 text-emerald-600 bg-emerald-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>
+                                    第二部分：橡皮筋（P2-1 用）
+                                </button>
+                                <button onClick={() => handleTabSwitch('rubber3')}
+                                    className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='rubber3'?'border-amber-500 text-amber-600 bg-amber-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>
+                                    第三部分：橡皮筋（P2-2 用）
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* ===== 內容區（兩個 tab 都掛載，用 display 切換）===== */}
+                    {/* ===== 內容區（三個 tab 都常駐掛載，用 display 切換；rubber2/rubber3 為同元件不同實例，state 與 log 都獨立）===== */}
                     <div className="flex-1 min-h-0 relative">
                         <div className={`absolute inset-0 ${activeTab==='spring' ? 'tab-shown':'tab-hidden'}`}>
                             <SpringExperiment/>
                         </div>
-                        <div className={`absolute inset-0 ${activeTab==='rubber' ? 'tab-shown':'tab-hidden'}`}>
-                            <RubberBandExperiment/>
+                        <div className={`absolute inset-0 ${activeTab==='rubber2' ? 'tab-shown':'tab-hidden'}`}>
+                            <RubberBandExperiment tabId={2}/>
+                        </div>
+                        <div className={`absolute inset-0 ${activeTab==='rubber3' ? 'tab-shown':'tab-hidden'}`}>
+                            <RubberBandExperiment tabId={3}/>
                         </div>
                     </div>
                 </div>

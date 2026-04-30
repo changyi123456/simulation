@@ -67,7 +67,9 @@ if (interactionHistory.length > 500) interactionHistory.shift();
 | Action | 觸發時機 | details 欄位 |
 |---|---|---|
 | `Initialize` | 應用程式首次載入 | `timestamp`、`sim` (`"Combined_Elasticity_Simulation"`) |
-| `SwitchTab` | 切換到不同的實驗 tab | `targetTab` (`"spring"` / `"rubber"`) |
+| `SwitchTab` | 切換到不同的實驗 tab | `targetTab` (`"spring"` / `"rubber2"` / `"rubber3"`) |
+
+> **【v5.1 變更】** 橡皮筋現在有兩個 tab：`rubber2`（第二部分，P2-1 用）與 `rubber3`（第三部分，P2-2 用）。兩個 tab 是同一個 `RubberBandExperiment` 元件的兩個獨立實例，state 與 log 都各自獨立。所有 `_Rubber` 事件的 details 都新增了 `tabId` 欄位（值為 `2` 或 `3`），用於區分學生在哪個階段操作。
 
 ### 3.2 彈簧實驗事件 (Spring)
 
@@ -86,21 +88,37 @@ if (interactionHistory.length > 500) interactionHistory.shift();
 | `AttemptedWhileLocked_Spring` ⭐新增 | 控制台已鎖定（達 10 次）時還呼叫操作函式 | `action` (`"addWeight"` / `"recordData"`)、`amount` 或 `mode` |
 | `ExperimentLocked_Spring` ⭐新增 | 一次性 — 累計記錄達 10 次的瞬間 | `totalRecordCount` (=10) |
 
-### 3.3 橡皮筋實驗事件 (Rubber)
+### 3.3 橡皮筋實驗事件 (Rubber) — 第二/第三部分共用，由 `tabId` 區分
+
+> 所有 `_Rubber` 事件的 details 都包含 `tabId: 2 | 3`（v5.1 起）。`tabId=2` 表示學生在第二部分操作（對應 P2-1），`tabId=3` 表示在第三部分（對應 P2-2）。
 
 | Action | 觸發時機 | details 欄位 |
 |---|---|---|
-| `TogglePan_Rubber` | 掛上 / 取下秤盤 | `isAttached` (boolean) |
-| `AddWeight_Rubber` | 成功新增砝碼 | `amount`、`newTotalMass` |
-| `WeightLimitExceeded_Rubber` | 嘗試新增超過 1000g | `attemptedMass` |
-| `ClearWeight_Rubber` | 點擊「清空砝碼」 | （無 details） |
-| `RecordDataPoint_Rubber` | 成功記錄一筆數據 | `mass` (g)、`totalLength` (cm) |
-| `ClearDataHistory_Rubber` | 確認清除實驗數據表 | （無 details） |
-| `CalculateTrendline_Rubber` | 計算整體線性趨勢 | `slope` (g/cm) |
-| `ExportDataCSV_Rubber` | 下載 CSV | （無 details） |
-| `TrendlineInsufficient_Rubber` ⭐新增 | 嘗試分析但資料 <2 筆 | `currentCount` |
-| `AttemptedWhileLocked_Rubber` ⭐新增 | 控制台已鎖定（達 30 次）時還呼叫操作函式 | `action`、`amount` |
-| `ExperimentLocked_Rubber` ⭐新增 | 一次性 — 累計記錄達 30 次的瞬間 | `totalRecordCount` (=30) |
+| `TogglePan_Rubber` | 掛上 / 取下秤盤 | `isAttached` (boolean)、`tabId` |
+| `AddWeight_Rubber` | 成功新增砝碼 | `amount`、`newTotalMass`、`tabId` |
+| `WeightLimitExceeded_Rubber` | 嘗試新增超過 1000g | `attemptedMass`、`tabId` |
+| `ClearWeight_Rubber` | 點擊「清空砝碼」 | `tabId` |
+| `RecordDataPoint_Rubber` | 成功記錄一筆數據 | `mass` (g)、`totalLength` (cm)、`tabId` |
+| `ClearDataHistory_Rubber` | 確認清除實驗數據表 | `tabId` |
+| `CalculateTrendline_Rubber` | 計算整體線性趨勢 | `slope` (g/cm)、`tabId` |
+| `ExportDataCSV_Rubber` | 下載 CSV | `tabId` |
+| `TrendlineInsufficient_Rubber` ⭐新增 | 嘗試分析但資料 <2 筆 | `currentCount`、`tabId` |
+| `AttemptedWhileLocked_Rubber` ⭐新增 | 控制台已鎖定（達 30 次）時還呼叫操作函式 | `action`、`amount`、`tabId` |
+| `ExperimentLocked_Rubber` ⭐新增 | 一次性 — 累計記錄達 30 次的瞬間 | `totalRecordCount` (=30)、`tabId` |
+
+#### 篩選範例（按 tabId 區分 P2-1 / P2-2 行為）
+
+```js
+// 取得 P2-1 階段的所有橡皮筋事件
+const p21_events = data.filter(e =>
+  e.action.endsWith('_Rubber') && e.details?.tabId === 2
+);
+
+// 取得 P2-2 階段
+const p22_events = data.filter(e =>
+  e.action.endsWith('_Rubber') && e.details?.tabId === 3
+);
+```
 
 ---
 

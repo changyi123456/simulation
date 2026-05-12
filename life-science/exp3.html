@@ -3,381 +3,130 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>人体稳态动平衡｜一页式虚拟实验</title>
+  <title>人体运动及其稳态调节｜异侧手脚跑步修正版</title>
   <style>
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-      background: #eef3f8;
-      color: #172033;
-    }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif; background: #eef3f8; color: #172033; }
     button, select, input { font: inherit; }
-    .app {
-      width: 100vw;
-      height: 100vh;
-      padding: 14px;
-      display: grid;
-      grid-template-rows: 58px 1fr;
-      gap: 12px;
-      overflow: hidden;
-    }
-    .topbar {
-      background: rgba(255,255,255,0.92);
-      border: 1px solid #d9e2ef;
-      border-radius: 18px;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-    }
+    .app { width: 100vw; height: 100vh; padding: 14px; display: grid; grid-template-rows: 58px 1fr; gap: 12px; overflow: hidden; }
+    .topbar { background: rgba(255,255,255,0.94); border: 1px solid #d9e2ef; border-radius: 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 12px; }
     .titleBlock { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .badge {
-      flex: 0 0 auto;
-      width: 38px; height: 38px;
-      border-radius: 13px;
-      background: #172033;
-      color: white;
-      display: grid;
-      place-items: center;
-      font-size: 20px;
-    }
+    .badge { width: 38px; height: 38px; border-radius: 13px; background: #172033; color: white; display: grid; place-items: center; font-size: 20px; flex: 0 0 auto; }
     h1 { margin: 0; font-size: 20px; line-height: 1.1; letter-spacing: 0.02em; }
     .subtitle { margin-top: 3px; color: #607086; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .topActions { display: flex; gap: 8px; align-items: center; }
-    .btn {
-      border: 0;
-      border-radius: 13px;
-      padding: 9px 13px;
-      background: #172033;
-      color: white;
-      cursor: pointer;
-      font-weight: 800;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
-      transition: 0.15s ease;
-      white-space: nowrap;
-    }
-    .btn:hover { transform: translateY(-1px); }
-    .btn.secondary { background: #ffffff; color: #172033; border: 1px solid #cbd5e1; box-shadow: none; }
-    .main {
-      min-height: 0;
-      display: grid;
-      grid-template-columns: 290px 1fr 330px;
-      gap: 12px;
-      overflow: hidden;
-    }
-    .panel, .lab, .board {
-      min-height: 0;
-      background: rgba(255,255,255,0.92);
-      border: 1px solid #d9e2ef;
-      border-radius: 22px;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-      overflow: hidden;
-    }
+    .modelNote { font-size: 11px; color: #64748b; border: 1px solid #d9e2ef; background: #f8fafc; border-radius: 14px; padding: 8px 10px; white-space: nowrap; flex: 0 0 auto; }
+    .main { min-height: 0; display: grid; grid-template-columns: 300px 1fr 390px; gap: 12px; overflow: hidden; }
+    .panel, .lab, .board { min-height: 0; background: rgba(255,255,255,0.94); border: 1px solid #d9e2ef; border-radius: 22px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); overflow: hidden; }
     .panel, .board { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
     .sectionTitle { font-size: 15px; font-weight: 900; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
-    .field { display: grid; gap: 6px; }
+    .field, .sliderRow { display: grid; gap: 6px; }
     label { font-size: 12px; font-weight: 850; color: #43536a; }
-    select {
-      width: 100%;
-      border: 1px solid #cbd5e1;
-      background: white;
-      padding: 8px 10px;
-      border-radius: 12px;
-      color: #172033;
-      outline: none;
-    }
-    .sliderRow { display: grid; gap: 6px; }
+    select { width: 100%; border: 1px solid #cbd5e1; background: white; padding: 8px 10px; border-radius: 12px; color: #172033; outline: none; }
     .sliderLabel { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 850; color: #43536a; }
     input[type="range"] { width: 100%; accent-color: #172033; }
     .controlsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .smallBtn {
-      border: 1px solid #cbd5e1;
-      border-radius: 13px;
-      padding: 10px 8px;
-      background: #fff;
-      color: #172033;
-      cursor: pointer;
-      font-weight: 900;
-      transition: 0.15s ease;
-    }
+    .smallBtn { border: 1px solid #cbd5e1; border-radius: 13px; padding: 10px 8px; background: #fff; color: #172033; cursor: pointer; font-weight: 900; transition: 0.15s ease; }
     .smallBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.08); }
     .smallBtn.primary { background: #172033; color: white; border-color: #172033; }
-    .smallBtn:disabled {
-      cursor: not-allowed;
-      opacity: 0.38;
-      background: #e5eaf1;
-      color: #64748b;
-      box-shadow: none;
-      transform: none;
-    }
-    .statusPill {
-      border-radius: 16px;
-      padding: 11px 12px;
-      background: #eef3f8;
-      border: 1px solid #d9e2ef;
-      font-size: 13px;
-      font-weight: 900;
-      color: #334155;
-      text-align: center;
-      min-height: 42px;
-      display: grid;
-      place-items: center;
-    }
-    .progressBox {
-      border-radius: 16px;
-      background: #f8fafc;
-      border: 1px solid #d9e2ef;
-      padding: 10px;
-    }
+    .smallBtn:disabled { cursor: not-allowed; opacity: 0.38; background: #e5eaf1; color: #64748b; box-shadow: none; transform: none; }
+    .statusPill { border-radius: 16px; padding: 11px 12px; background: #eef3f8; border: 1px solid #d9e2ef; font-size: 13px; font-weight: 900; color: #334155; text-align: center; min-height: 42px; display: grid; place-items: center; }
+    .progressBox { border-radius: 16px; background: #f8fafc; border: 1px solid #d9e2ef; padding: 10px; }
     .progressTitle { font-size: 12px; font-weight: 900; color:#43536a; display:flex; justify-content:space-between; }
     .progressBar { margin-top: 7px; height: 10px; border-radius: 999px; background:#e2e8f0; overflow:hidden; }
     .progressFill { height:100%; width:0%; border-radius:999px; background:#172033; transition: width .2s linear; }
-    .lab {
-      position: relative;
-      background: linear-gradient(180deg, #e9f6ff 0%, #f7fbff 52%, #d2dce8 52%, #d2dce8 100%);
-    }
-    .labHeader {
-      position: absolute;
-      top: 14px; left: 14px; right: 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: start;
-      z-index: 4;
-      pointer-events: none;
-    }
-    .labTag, .timerBox {
-      border-radius: 16px;
-      background: rgba(255,255,255,0.86);
-      border: 1px solid rgba(203,213,225,0.85);
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-      padding: 10px 13px;
-      color: #334155;
-    }
+    .runSummary { border-radius: 16px; padding: 10px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-size: 12px; font-weight: 900; line-height: 1.45; }
+    .lab { position: relative; background: linear-gradient(180deg, #e9f6ff 0%, #f7fbff 52%, #d2dce8 52%, #d2dce8 100%); }
+    .labHeader { position: absolute; top: 14px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: start; z-index: 4; pointer-events: none; gap: 10px; }
+    .labTag, .timerBox, .runCue { border-radius: 16px; background: rgba(255,255,255,0.90); border: 1px solid rgba(203,213,225,0.88); box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); padding: 10px 13px; color: #334155; }
     .labTag b { display: block; font-size: 13px; }
     .labTag span, .timerBox span { font-size: 11px; color: #64748b; }
-    .timerBox { text-align: right; min-width: 132px; }
+    .timerBox { text-align: right; min-width: 132px; flex: 0 0 auto; }
     .timerBox b { display:block; font-size: 24px; line-height: 1; color: #172033; }
-    .subjectWrap {
-      position: absolute;
-      left: 50%; bottom: 56px;
-      transform: translateX(-50%);
-      width: 230px;
-      height: 440px;
-      display: flex;
-      align-items: end;
-      justify-content: center;
-    }
-    .subject {
-      position: relative;
-      width: 210px;
-      height: 390px;
-      transform-origin: 50% 100%;
-      transition: transform .25s ease;
-      --squatDur: 1s;
-    }
-    .subject.exercise { animation: squat var(--squatDur) ease-in-out infinite; }
-    @keyframes squat {
-      0%, 100% { transform: translateY(0) scaleY(1); }
-      50% { transform: translateY(54px) scaleY(0.88); }
-    }
-    .head {
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 88px;
-      height: 88px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 25%, #ffd86a 0%, #ffc247 48%, #f0a832 100%);
-      border: 4px solid #172033;
-      overflow: hidden;
-      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.15);
-      z-index: 3;
-    }
-    .faceLayer { position: absolute; inset: 0; width: 100%; height: 100%; }
-    .eye {
-      position: absolute;
-      top: 32px;
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: #ffffff;
-      border: 2px solid rgba(15, 23, 42, 0.2);
-    }
+    .runCue { position: absolute; left: 50%; transform: translateX(-50%); bottom: 66px; z-index: 5; min-width: 220px; text-align: center; font-weight: 950; color: #172033; }
+    .track { position: absolute; left: 0; right: 0; bottom: 56px; height: 6px; background: repeating-linear-gradient(90deg, #94a3b8 0 36px, transparent 36px 72px); opacity: .55; }
+    .subjectWrap { position: absolute; left: 50%; bottom: 68px; transform: translateX(-50%); width: 250px; height: 440px; display: flex; align-items: end; justify-content: center; }
+    .subject { position: relative; width: 210px; height: 390px; transform-origin: 50% 100%; transition: transform .25s ease; --runDur: .8s; }
+    .subject.running { animation: runBob var(--runDur) ease-in-out infinite; }
+    @keyframes runBob { 0%, 100% { transform: translateY(0) scaleX(1); } 50% { transform: translateY(-18px) scaleX(0.985); } }
+    .head { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 88px; height: 88px; border-radius: 50%; background: radial-gradient(circle at 35% 25%, #ffd86a 0%, #ffc247 48%, #f0a832 100%); border: 4px solid #172033; overflow: hidden; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.15); z-index: 3; }
+    .faceLayer { position: absolute; inset: 0; }
+    .eye { position: absolute; top: 32px; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 2px solid rgba(15, 23, 42, 0.2); }
     .eye.left { left: 24px; }
     .eye.right { right: 24px; }
-    .eye::after {
-      content: "";
-      position: absolute;
-      left: 4px;
-      top: 4px;
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: #172033;
-    }
-    .smile {
-      position: absolute;
-      left: 50%;
-      top: 54px;
-      width: 35px;
-      height: 18px;
-      transform: translateX(-50%);
-      border-bottom: 5px solid #7c3f35;
-      border-radius: 0 0 30px 30px;
-    }
-    .cheek {
-      position: absolute;
-      top: 51px;
-      width: 14px;
-      height: 7px;
-      border-radius: 50%;
-      background: rgba(239, 87, 113, 0.35);
-    }
+    .eye::after { content: ""; position: absolute; left: 4px; top: 4px; width: 5px; height: 5px; border-radius: 50%; background: #172033; }
+    .smile { position: absolute; left: 50%; top: 54px; width: 35px; height: 18px; transform: translateX(-50%); border-bottom: 5px solid #7c3f35; border-radius: 0 0 30px 30px; }
+    .cheek { position: absolute; top: 51px; width: 14px; height: 7px; border-radius: 50%; background: rgba(239, 87, 113, 0.35); }
     .cheek.left { left: 17px; }
     .cheek.right { right: 17px; }
-    .head.beginner .smile {
-      top: 58px;
-      width: 24px;
-      height: 4px;
-      border-bottom: none;
-      border-radius: 999px;
-      background: #7c3f35;
-    }
+    .head.beginner .smile { top: 58px; width: 24px; height: 4px; border-bottom: none; border-radius: 999px; background: #7c3f35; }
     .head.beginner .eye::after { transform: translateY(2px); }
-    .head.athlete::before {
-      content: "";
-      position: absolute;
-      left: 13px;
-      top: 24px;
-      width: 62px;
-      height: 20px;
-      border-radius: 12px;
-      background: #34324a;
-      box-shadow: inset 0 0 0 3px rgba(255,255,255,0.12);
-      z-index: 5;
-    }
+    .head.athlete::before { content: ""; position: absolute; left: 13px; top: 24px; width: 62px; height: 20px; border-radius: 12px; background: #34324a; box-shadow: inset 0 0 0 3px rgba(255,255,255,0.12); z-index: 5; }
     .head.athlete .eye { display: none; }
     .head.athlete .smile { top: 56px; }
-    .torso {
-      position: absolute;
-      top: 76px; left: 50%; transform: translateX(-50%);
-      width: 126px; height: 152px;
-      border-radius: 38px;
-      background: white;
-      border: 5px solid #172033;
-      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
-      transform-origin: 50% 50%;
-      animation: breathe 1.55s ease-in-out infinite alternate;
-    }
-    @keyframes breathe {
-      from { transform: translateX(-50%) scaleX(1); }
-      to { transform: translateX(-50%) scaleX(var(--breath, 1.05)); }
-    }
-    .heart {
-      position: absolute;
-      top: 26px;
-      left: 76px;
-      font-size: 28px;
-      color: #e11d48;
-      filter: drop-shadow(0 3px 5px rgba(225, 29, 72, 0.35));
-      animation: heartbeat var(--heartSpeed, 1s) ease-in-out infinite;
-      z-index: 4;
-      transform-origin: center center;
-    }
-    @keyframes heartbeat {
-      0%, 100% { transform: scale(1); }
-      35% { transform: scale(1.24); }
-      55% { transform: scale(0.96); }
-    }
-
-    /* 肺部：上移到胸口、整体严格居中，浅肤色并与红色心脏区分 */
-    .lungs {
-      position: absolute;
-      top: 38px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 68px;
-      height: 54px;
-      z-index: 2;
-    }
-    .lung {
-      position: absolute;
-      top: 12px;
-      width: 28px;
-      height: 40px;
-      background: linear-gradient(180deg, #ffe0c9, #ffc3a3 62%, #f3a47f);
-      border: 3px solid #d88465;
-      opacity: 0.96;
-      box-shadow: inset 0 4px 8px rgba(255,255,255,.45), 0 3px 6px rgba(216,132,101,.22);
-    }
+    .torso { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); width: 126px; height: 152px; border-radius: 38px; background: white; border: 5px solid #172033; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12); transform-origin: 50% 50%; animation: breathe 1.55s ease-in-out infinite alternate; z-index: 2; }
+    @keyframes breathe { from { transform: translateX(-50%) scaleX(1); } to { transform: translateX(-50%) scaleX(var(--breath, 1.05)); } }
+    .heart { position: absolute; top: 26px; left: 76px; font-size: 28px; color: #e11d48; filter: drop-shadow(0 3px 5px rgba(225, 29, 72, 0.35)); animation: heartbeat var(--heartSpeed, 1s) ease-in-out infinite; z-index: 4; transform-origin: center center; }
+    @keyframes heartbeat { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.24); } 55% { transform: scale(0.96); } }
+    .lungs { position: absolute; top: 38px; left: 50%; transform: translateX(-50%); width: 68px; height: 54px; z-index: 2; }
+    .lung { position: absolute; top: 12px; width: 28px; height: 40px; background: linear-gradient(180deg, #ffe0c9, #ffc3a3 62%, #f3a47f); border: 3px solid #d88465; opacity: .96; box-shadow: inset 0 4px 8px rgba(255,255,255,.45), 0 3px 6px rgba(216,132,101,.22); }
     .lung.left { left: 3px; border-radius: 18px 9px 18px 18px; }
     .lung.right { right: 3px; border-radius: 9px 18px 18px 18px; }
-    .trachea {
-      position: absolute;
-      left: 50%;
-      top: 0;
-      transform: translateX(-50%);
-      width: 8px;
-      height: 34px;
-      border-radius: 8px;
-      background: #d88465;
-      z-index: 3;
-    }
+    .trachea { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 8px; height: 34px; border-radius: 8px; background: #d88465; z-index: 3; }
+
     .arm { position:absolute; top: 98px; width: 18px; height: 112px; border-radius: 18px; background:#172033; transform-origin: top center; }
-    .arm.left { left: 28px; transform: rotate(11deg); }
-    .arm.right { right: 28px; transform: rotate(-11deg); }
+    .arm.left { left: 28px; transform: translateY(0) scaleX(1); }
+    .arm.right { right: 28px; transform: translateY(0) scaleX(1); }
     .leg { position:absolute; top: 222px; width: 24px; height: 145px; border-radius: 18px; background:#172033; transform-origin: top center; }
     .leg.left { left: 68px; }
     .leg.right { right: 68px; }
-    .subject.exercise .leg.left { animation: legLeft var(--squatDur) ease-in-out infinite; }
-    .subject.exercise .leg.right { animation: legRight var(--squatDur) ease-in-out infinite; }
-    @keyframes legLeft { 50% { transform: rotate(18deg); } }
-    @keyframes legRight { 50% { transform: rotate(-18deg); } }
-    .floor {
-      position: absolute;
-      left: 0; right: 0; bottom: 0;
-      height: 56px;
-      background: #bfcbd8;
-      border-top: 2px solid #95a3b4;
+
+    /* 修正重點：跑步為異側手腳。
+       左手前時，右腳前；右手前時，左腳前。
+       前方 = 較粗、較深、略下伸；後方 = 較細、較淡、略上收。 */
+    .subject.running .arm.left { animation: limbForward var(--runDur) ease-in-out infinite; }
+    .subject.running .arm.right { animation: limbBackward var(--runDur) ease-in-out infinite; }
+    .subject.running .leg.left { animation: limbBackwardLeg var(--runDur) ease-in-out infinite; }
+    .subject.running .leg.right { animation: limbForwardLeg var(--runDur) ease-in-out infinite; }
+
+    @keyframes limbForward {
+      0%, 100% { transform: translateY(10px) scaleX(1.18); opacity: 1; filter: brightness(1.08); }
+      50% { transform: translateY(-12px) scaleX(.72); opacity: .55; filter: brightness(.85); }
     }
-    .meterStack { display: grid; gap: 8px; }
-    .meter {
-      border: 1px solid #d9e2ef;
-      border-radius: 16px;
-      padding: 10px 11px;
-      background: #fff;
+    @keyframes limbBackward {
+      0%, 100% { transform: translateY(-12px) scaleX(.72); opacity: .55; filter: brightness(.85); }
+      50% { transform: translateY(10px) scaleX(1.18); opacity: 1; filter: brightness(1.08); }
     }
-    .meterTop { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; }
-    .meterName { font-size: 12px; font-weight: 900; color: #43536a; }
-    .meterValue { font-size: 18px; font-weight: 950; color: #172033; }
-    .meterUnit { font-size: 10px; color:#64748b; font-weight:700; margin-left:2px; }
-    .bar { height: 9px; border-radius: 999px; background:#e8eef5; overflow:hidden; }
+    @keyframes limbForwardLeg {
+      0%, 100% { transform: translateY(12px) scaleX(1.22) scaleY(1.04); opacity: 1; filter: brightness(1.08); }
+      50% { transform: translateY(-16px) scaleX(.72) scaleY(.90); opacity: .50; filter: brightness(.82); }
+    }
+    @keyframes limbBackwardLeg {
+      0%, 100% { transform: translateY(-16px) scaleX(.72) scaleY(.90); opacity: .50; filter: brightness(.82); }
+      50% { transform: translateY(12px) scaleX(1.22) scaleY(1.04); opacity: 1; filter: brightness(1.08); }
+    }
+
+    .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: #bfcbd8; border-top: 2px solid #95a3b4; }
+    .meterStack { display: grid; gap: 6px; }
+    .meter { border: 1px solid #d9e2ef; border-radius: 15px; padding: 8px 10px; background: #fff; }
+    .meterTop { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+    .meterName { font-size: 11px; font-weight: 900; color: #43536a; }
+    .meterValue { font-size: 16px; font-weight: 950; color: #172033; }
+    .meterUnit { font-size: 9px; color:#64748b; font-weight:700; margin-left:2px; }
+    .bar { height: 7px; border-radius: 999px; background:#e8eef5; overflow:hidden; }
     .fill { height:100%; width:0%; border-radius:999px; background:#172033; transition: width .25s ease; }
     .recordBox { flex: 1; min-height: 0; border: 1px solid #d9e2ef; border-radius: 16px; overflow: hidden; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th { background: #f1f5f9; color: #43536a; text-align: left; padding: 8px; font-size: 11px; }
-    td { padding: 8px; border-top: 1px solid #eef2f7; color: #172033; font-weight: 750; }
+    table { width: 100%; height: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f1f5f9; color: #43536a; text-align: left; padding: 10px 9px; font-size: 12px; }
+    td { padding: 12px 9px; border-top: 1px solid #eef2f7; color: #172033; font-weight: 800; }
     .measureGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .measureGrid .smallBtn { padding: 9px 6px; font-size: 12px; }
-    .noteBox {
-      font-size: 11px;
-      color: #64748b;
-      line-height: 1.4;
-      padding: 8px 10px;
-      border-radius: 14px;
-      background: #f8fafc;
-      border: 1px dashed #cbd5e1;
-    }
-    @media (max-width: 1050px) {
-      .main { grid-template-columns: 260px 1fr 300px; }
+    .noteBox { font-size: 11px; color: #64748b; line-height: 1.4; padding: 8px 10px; border-radius: 14px; background: #f8fafc; border: 1px dashed #cbd5e1; }
+
+    @media (max-width: 1080px) {
+      .main { grid-template-columns: 270px 1fr 350px; }
       .app { padding: 10px; gap: 10px; }
       h1 { font-size: 17px; }
+      .modelNote { display: none; }
     }
     @media (max-height: 720px) {
       .app { grid-template-rows: 50px 1fr; padding: 8px; gap: 8px; }
@@ -386,11 +135,11 @@
       h1 { font-size: 17px; }
       .subtitle { display:none; }
       .panel, .board { padding: 10px; gap: 8px; }
-      .subjectWrap { bottom: 44px; transform: translateX(-50%) scale(0.86); transform-origin: 50% 100%; }
+      .subjectWrap { bottom: 54px; transform: translateX(-50%) scale(0.86); transform-origin: 50% 100%; }
       .labHeader { top: 10px; left: 10px; right: 10px; }
       .field, .sliderRow { gap: 4px; }
-      .meter { padding: 8px; }
-      td, th { padding: 6px; }
+      .meter { padding: 7px 8px; }
+      td, th { padding: 7px; }
     }
   </style>
 </head>
@@ -398,15 +147,13 @@
   <div class="app">
     <header class="topbar">
       <div class="titleBlock">
-        <div class="badge">🧪</div>
+        <div class="badge">🏃</div>
         <div>
-          <h1>人体稳态动平衡｜一页式虚拟实验</h1>
-          <div class="subtitle">流程：测安静值 → 开始下蹲 → 自动完成运动 → 依次测量即刻、5 分钟、10 分钟</div>
+          <h1>人体运动及其稳态调节</h1>
+          <div class="subtitle">流程：测安静值 → 设置跑步距离与时间 → 自动完成跑步 → 依次测量即刻、5 分钟、10 分钟</div>
         </div>
       </div>
-      <div class="topActions">
-        <button class="btn secondary" id="resetBtn">重新开始</button>
-      </div>
+      <div class="modelNote">正面跑步动画：异侧手脚前后摆动</div>
     </header>
 
     <main class="main">
@@ -422,70 +169,46 @@
             </select>
           </div>
         </div>
-
         <div>
-          <h2 class="sectionTitle">② 下蹲设置</h2>
+          <h2 class="sectionTitle">② 跑步设置</h2>
           <div class="sliderRow">
-            <div class="sliderLabel"><span>节奏</span><span id="tempoText">30 次/min</span></div>
-            <input id="tempo" type="range" min="15" max="45" step="5" value="30" />
+            <div class="sliderLabel"><span>跑步距离</span><span id="distanceText">1.0 km</span></div>
+            <input id="distance" type="range" min="0.5" max="3.0" step="0.5" value="1.0" />
           </div>
           <div class="sliderRow">
-            <div class="sliderLabel"><span>运动时间</span><span id="secondsText">120 秒</span></div>
-            <input id="seconds" type="range" min="30" max="180" step="30" value="120" />
+            <div class="sliderLabel"><span>跑步时间</span><span id="minutesText">10 分钟</span></div>
+            <input id="minutes" type="range" min="0" max="15" step="5" value="10" />
           </div>
+          <div class="runSummary" id="runSummary">速度：6.0 km/h｜慢跑</div>
         </div>
-
         <div>
           <h2 class="sectionTitle">③ 实验操作</h2>
           <div class="controlsGrid">
             <button class="smallBtn primary" id="restBtn">测安静值</button>
-            <button class="smallBtn" id="exerciseBtn" disabled>开始下蹲</button>
+            <button class="smallBtn" id="runBtn" disabled>开始跑步</button>
+            <button class="smallBtn" id="resetBtn" style="grid-column: span 2;">重新开始</button>
           </div>
         </div>
-
         <div class="progressBox">
-          <div class="progressTitle"><span>运动快进进度</span><span id="progressText">0%</span></div>
+          <div class="progressTitle"><span>跑步快进进度</span><span id="progressText">0%</span></div>
           <div class="progressBar"><div class="progressFill" id="progressFill"></div></div>
         </div>
-
         <div class="statusPill" id="statusText">状态：先测安静值</div>
       </aside>
 
       <section class="lab">
         <div class="labHeader">
-          <div class="labTag">
-            <b>虚拟实验室</b>
-            <span>动画会随下蹲节奏与运动时间变化</span>
-          </div>
-          <div class="timerBox">
-            <span id="timerLabel">恢复时间</span>
-            <b id="timeReadout">0 min</b>
-          </div>
+          <div class="labTag"><b>虚拟跑步实验室</b><span>异侧手脚：左手前时右脚前</span></div>
+          <div class="timerBox"><span id="timerLabel">恢复时间</span><b id="timeReadout">0 min</b></div>
         </div>
-
+        <div class="runCue" id="runCue">当前：安静观察</div>
+        <div class="track"></div>
         <div class="subjectWrap">
           <div class="subject" id="subject">
-            <div class="head" id="head">
-              <div class="faceLayer">
-                <span class="eye left"></span>
-                <span class="eye right"></span>
-                <span class="cheek left"></span>
-                <span class="cheek right"></span>
-                <span class="smile"></span>
-              </div>
-            </div>
-            <div class="arm left"></div>
-            <div class="arm right"></div>
-            <div class="torso" id="torso">
-              <div class="heart">♥</div>
-              <div class="lungs">
-                <div class="trachea"></div>
-                <div class="lung left"></div>
-                <div class="lung right"></div>
-              </div>
-            </div>
-            <div class="leg left"></div>
-            <div class="leg right"></div>
+            <div class="head" id="head"><div class="faceLayer"><span class="eye left"></span><span class="eye right"></span><span class="cheek left"></span><span class="cheek right"></span><span class="smile"></span></div></div>
+            <div class="arm left"></div><div class="arm right"></div>
+            <div class="torso" id="torso"><div class="heart">♥</div><div class="lungs"><div class="trachea"></div><div class="lung left"></div><div class="lung right"></div></div></div>
+            <div class="leg left"></div><div class="leg right"></div>
           </div>
         </div>
         <div class="floor"></div>
@@ -495,262 +218,75 @@
         <div>
           <h2 class="sectionTitle">④ 实时仪表</h2>
           <div class="meterStack">
-            <div class="meter">
-              <div class="meterTop"><span class="meterName">❤️ 心率</span><span class="meterValue" id="hrValue">72<span class="meterUnit">次/min</span></span></div>
-              <div class="bar"><div class="fill" id="hrFill"></div></div>
-            </div>
-            <div class="meter">
-              <div class="meterTop"><span class="meterName">🫁 呼吸频率</span><span class="meterValue" id="rrValue">16<span class="meterUnit">次/min</span></span></div>
-              <div class="bar"><div class="fill" id="rrFill"></div></div>
-            </div>
-            <div class="meter">
-              <div class="meterTop"><span class="meterName">🩺 血压</span><span class="meterValue" id="bpValue">116/74<span class="meterUnit">mmHg</span></span></div>
-              <div class="bar"><div class="fill" id="bpFill"></div></div>
-            </div>
+            <div class="meter"><div class="meterTop"><span class="meterName">❤️ 心率</span><span class="meterValue" id="hrValue">72<span class="meterUnit">次/min</span></span></div><div class="bar"><div class="fill" id="hrFill"></div></div></div>
+            <div class="meter"><div class="meterTop"><span class="meterName">🫁 呼吸频率</span><span class="meterValue" id="rrValue">16<span class="meterUnit">次/min</span></span></div><div class="bar"><div class="fill" id="rrFill"></div></div></div>
+            <div class="meter"><div class="meterTop"><span class="meterName">🩺 血压</span><span class="meterValue" id="bpValue">116/74<span class="meterUnit">mmHg</span></span></div><div class="bar"><div class="fill" id="bpFill"></div></div></div>
           </div>
         </div>
-
         <div>
           <h2 class="sectionTitle">⑤ 恢复测量</h2>
-          <div class="sliderRow">
-            <div class="sliderLabel"><span>运动停止后</span><span id="recoveryText">0 分钟</span></div>
-            <input id="recovery" type="range" min="0" max="10" step="1" value="0" disabled />
-          </div>
-          <div class="measureGrid">
-            <button class="smallBtn primary" id="nowBtn" disabled>即刻</button>
-            <button class="smallBtn" id="m5Btn" disabled>5 分钟</button>
-            <button class="smallBtn" id="m10Btn" disabled>10 分钟</button>
-          </div>
+          <div class="sliderRow"><div class="sliderLabel"><span>运动停止后</span><span id="recoveryText">0 分钟</span></div><input id="recovery" type="range" min="0" max="10" step="1" value="0" disabled /></div>
+          <div class="measureGrid"><button class="smallBtn primary" id="nowBtn" disabled>即刻</button><button class="smallBtn" id="m5Btn" disabled>5 分钟</button><button class="smallBtn" id="m10Btn" disabled>10 分钟</button></div>
         </div>
-
-        <div class="recordBox">
-          <table>
-            <thead>
-              <tr><th>时间</th><th>心率</th><th>呼吸</th><th>血压</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>安静</td><td id="recRestHR">—</td><td id="recRestRR">—</td><td id="recRestBP">—</td></tr>
-              <tr><td>即刻</td><td id="recNowHR">—</td><td id="recNowRR">—</td><td id="recNowBP">—</td></tr>
-              <tr><td>5 分钟</td><td id="rec5HR">—</td><td id="rec5RR">—</td><td id="rec5BP">—</td></tr>
-              <tr><td>10 分钟</td><td id="rec10HR">—</td><td id="rec10RR">—</td><td id="rec10BP">—</td></tr>
-            </tbody>
-          </table>
-        </div>
-
+        <div class="recordBox"><table><thead><tr><th>时间</th><th>心率</th><th>呼吸</th><th>血压</th></tr></thead><tbody><tr><td>安静</td><td id="recRestHR">—</td><td id="recRestRR">—</td><td id="recRestBP">—</td></tr><tr><td>即刻</td><td id="recNowHR">—</td><td id="recNowRR">—</td><td id="recNowBP">—</td></tr><tr><td>5 分钟</td><td id="rec5HR">—</td><td id="rec5RR">—</td><td id="rec5BP">—</td></tr><tr><td>10 分钟</td><td id="rec10HR">—</td><td id="rec10RR">—</td><td id="rec10BP">—</td></tr></tbody></table></div>
         <div class="noteBox">测量按钮会按照实验流程逐步解锁，避免跳过前一个时间点。</div>
       </aside>
     </main>
   </div>
 
   <script>
-    const profiles = {
-      beginner: { faceClass: "beginner", restHR: 82, restRR: 18, restSBP: 122, restDBP: 78, k: 0.18, load: 1.15 },
-      normal: { faceClass: "normal", restHR: 72, restRR: 16, restSBP: 116, restDBP: 74, k: 0.30, load: 1.00 },
-      athlete: { faceClass: "athlete", restHR: 60, restRR: 14, restSBP: 112, restDBP: 70, k: 0.50, load: 0.86 }
-    };
-
-    let stage = "rest";
-    let exerciseTimer = null;
-    let exerciseProgress = 0;
-    let nextMeasure = "locked";
-    const records = {};
-
-    const $ = (id) => document.getElementById(id);
-    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-    const round = (v) => Math.round(v);
-
-    function getInputs() {
-      return {
-        profile: $("profile").value,
-        tempo: Number($("tempo").value),
-        seconds: Number($("seconds").value),
-        recovery: Number($("recovery").value)
+    (() => {
+      const profiles = {
+        beginner: { faceClass: "beginner", restHR: 82, restRR: 18, restSBP: 122, restDBP: 78, k: 0.18, load: 1.15, vo2max: 35 },
+        normal: { faceClass: "normal", restHR: 72, restRR: 16, restSBP: 116, restDBP: 74, k: 0.30, load: 1.00, vo2max: 45 },
+        athlete: { faceClass: "athlete", restHR: 60, restRR: 14, restSBP: 112, restDBP: 70, k: 0.50, load: 0.86, vo2max: 60 }
       };
-    }
-
-    function virtualIntensityFromTempoAndDuration(tempo, seconds) {
-      const tempoFactor = tempo / 30;
-      const durationFactor = 1 - Math.exp(-(seconds / 60) / 1.2);
-      return clamp(0.55 * tempoFactor * durationFactor, 0.08, 1.10);
-    }
-
-    function calculate(profileKey, tempo, seconds, minute) {
-      const p = profiles[profileKey];
-      const challenge = clamp(virtualIntensityFromTempoAndDuration(tempo, seconds) * p.load, 0.05, 1.25);
-      const peakHR = clamp(p.restHR + 95 * challenge, p.restHR, 205);
-      const peakRR = clamp(p.restRR + 24 * challenge, p.restRR, 52);
-      const peakSBP = clamp(p.restSBP + 48 * challenge, p.restSBP, 190);
-      const dbpAmp = profileKey === "athlete" ? -5 : profileKey === "beginner" ? 4 : -2;
-      const peakDBP = clamp(p.restDBP + dbpAmp * challenge, 55, 100);
-      const HR = p.restHR + (peakHR - p.restHR) * Math.exp(-p.k * minute);
-      const RR = p.restRR + (peakRR - p.restRR) * Math.exp(-(p.k * 0.72) * minute);
-      const bpK = profileKey === "beginner" ? 0.24 : profileKey === "athlete" ? 0.45 : 0.34;
-      const SBP = p.restSBP + (peakSBP - p.restSBP) * Math.exp(-bpK * minute);
-      const DBP = p.restDBP + (peakDBP - p.restDBP) * Math.exp(-0.4 * minute);
-      const fatigue = clamp((HR - p.restHR) / 90 + (RR - p.restRR) / 30, 0, 1);
-      return { HR: round(HR), RR: round(RR), SBP: round(SBP), DBP: round(DBP), fatigue };
-    }
-
-    function getExerciseState(profileKey, tempo, seconds, progress) {
-      const p = profiles[profileKey];
-      const peak = calculate(profileKey, tempo, seconds, 0);
-      const factor = clamp(progress, 0, 1);
-      const HR = p.restHR + (peak.HR - p.restHR) * factor;
-      const RR = p.restRR + (peak.RR - p.restRR) * factor;
-      const SBP = p.restSBP + (peak.SBP - p.restSBP) * factor;
-      const DBP = p.restDBP + (peak.DBP - p.restDBP) * factor;
-      const fatigue = clamp((HR - p.restHR) / 90 + (RR - p.restRR) / 30, 0, 1);
-      return { HR: round(HR), RR: round(RR), SBP: round(SBP), DBP: round(DBP), fatigue };
-    }
-
-    function getRestState(profileKey) {
-      const p = profiles[profileKey];
-      return { HR: p.restHR, RR: p.restRR, SBP: p.restSBP, DBP: p.restDBP, fatigue: 0 };
-    }
-
-    function setBar(id, value, min, max) {
-      const pct = clamp(((value - min) / (max - min)) * 100, 0, 100);
-      $(id).style.width = pct + "%";
-    }
-
-    function updateButtons() {
-      const hasRest = Boolean(records.rest);
-      $("exerciseBtn").disabled = !hasRest || stage === "exercise";
-      $("restBtn").disabled = stage === "exercise";
-      $("profile").disabled = stage === "exercise";
-      $("tempo").disabled = stage === "exercise";
-      $("seconds").disabled = stage === "exercise";
-      $("recovery").disabled = stage !== "measure";
-      $("nowBtn").disabled = nextMeasure !== "now";
-      $("m5Btn").disabled = nextMeasure !== "m5";
-      $("m10Btn").disabled = nextMeasure !== "m10";
-    }
-
-    function update() {
-      const input = getInputs();
-      const p = profiles[input.profile];
-      let state;
-
-      if (stage === "exercise") state = getExerciseState(input.profile, input.tempo, input.seconds, exerciseProgress);
-      else if (stage === "measure") state = calculate(input.profile, input.tempo, input.seconds, input.recovery);
-      else state = getRestState(input.profile);
-
-      const squatDuration = clamp(60 / input.tempo, 0.35, 4.0);
-      $("subject").style.setProperty("--squatDur", squatDuration + "s");
-      $("head").className = "head " + p.faceClass;
-      $("subject").classList.toggle("exercise", stage === "exercise");
-      $("torso").style.setProperty("--breath", String(1 + state.fatigue * 0.22));
-      $("torso").style.setProperty("--heartSpeed", String(clamp(1.25 - state.fatigue * 0.85, 0.38, 1.25)) + "s");
-
-      $("hrValue").innerHTML = `${state.HR}<span class="meterUnit">次/min</span>`;
-      $("rrValue").innerHTML = `${state.RR}<span class="meterUnit">次/min</span>`;
-      $("bpValue").innerHTML = `${state.SBP}/${state.DBP}<span class="meterUnit">mmHg</span>`;
-      setBar("hrFill", state.HR, 50, 200);
-      setBar("rrFill", state.RR, 10, 55);
-      setBar("bpFill", state.SBP, 90, 190);
-
-      $("tempoText").textContent = input.tempo + " 次/min";
-      $("secondsText").textContent = input.seconds + " 秒";
-      $("recoveryText").textContent = input.recovery + " 分钟";
-      $("timerLabel").textContent = stage === "exercise" ? "运动快进" : "恢复时间";
-      $("timeReadout").textContent = stage === "exercise" ? Math.round(exerciseProgress * 100) + "%" : input.recovery + " min";
-      $("progressText").textContent = Math.round(exerciseProgress * 100) + "%";
-      $("progressFill").style.width = Math.round(exerciseProgress * 100) + "%";
-
-      const label = stage === "rest" ? (records.rest ? "安静值已记录" : "先测安静值") : stage === "exercise" ? "下蹲中" : "恢复测量";
-      const loadText = state.fatigue < 0.35 ? "接近安静" : state.fatigue < 0.7 ? "正在恢复" : "负荷偏高";
-      $("statusText").textContent = `状态：${label}｜${loadText}`;
-      updateButtons();
-    }
-
-    function writeRecord(key, state) {
-      records[key] = state;
-      const prefix = key === "rest" ? "recRest" : key === "now" ? "recNow" : key === "m5" ? "rec5" : "rec10";
-      $(prefix + "HR").textContent = state.HR;
-      $(prefix + "RR").textContent = state.RR;
-      $(prefix + "BP").textContent = `${state.SBP}/${state.DBP}`;
-    }
-
-    function recordRest() {
-      if (stage === "exercise") return;
-      const input = getInputs();
-      writeRecord("rest", getRestState(input.profile));
-      stage = "rest";
-      exerciseProgress = 0;
-      nextMeasure = "locked";
-      $("recovery").value = 0;
-      update();
-    }
-
-    function startExercise() {
-      if (!records.rest || stage === "exercise") return;
-      clearInterval(exerciseTimer);
-      stage = "exercise";
-      nextMeasure = "locked";
-      exerciseProgress = 0;
-      $("recovery").value = 0;
-
-      const input = getInputs();
-      const virtualDurationMs = clamp(input.seconds * 35, 1300, 6500);
-      const startTime = performance.now();
-      exerciseTimer = setInterval(() => {
-        const elapsed = performance.now() - startTime;
-        exerciseProgress = clamp(elapsed / virtualDurationMs, 0, 1);
-        update();
-        if (exerciseProgress >= 1) {
-          clearInterval(exerciseTimer);
-          exerciseTimer = null;
-          stage = "measure";
-          nextMeasure = "now";
-          $("recovery").value = 0;
-          update();
-        }
-      }, 50);
-      update();
-    }
-
-    function recordAt(key, minute) {
-      if (nextMeasure !== key) return;
-      const input = getInputs();
-      stage = "measure";
-      $("recovery").value = minute;
-      const state = calculate(input.profile, input.tempo, input.seconds, minute);
-      writeRecord(key, state);
-      if (key === "now") nextMeasure = "m5";
-      if (key === "m5") nextMeasure = "m10";
-      if (key === "m10") nextMeasure = "done";
-      update();
-    }
-
-    function resetAll() {
-      clearInterval(exerciseTimer);
-      exerciseTimer = null;
-      stage = "rest";
-      exerciseProgress = 0;
-      nextMeasure = "locked";
-      Object.keys(records).forEach(key => delete records[key]);
-      $("profile").value = "normal";
-      $("tempo").value = 30;
-      $("seconds").value = 120;
-      $("recovery").value = 0;
-      ["recRest", "recNow", "rec5", "rec10"].forEach(prefix => {
-        $(prefix + "HR").textContent = "—";
-        $(prefix + "RR").textContent = "—";
-        $(prefix + "BP").textContent = "—";
-      });
-      update();
-    }
-
-    ["profile", "tempo", "seconds"].forEach(id => $(id).addEventListener("input", update));
-    $("recovery").addEventListener("input", update);
-    $("restBtn").addEventListener("click", recordRest);
-    $("exerciseBtn").addEventListener("click", startExercise);
-    $("nowBtn").addEventListener("click", () => recordAt("now", 0));
-    $("m5Btn").addEventListener("click", () => recordAt("m5", 5));
-    $("m10Btn").addEventListener("click", () => recordAt("m10", 10));
-    $("resetBtn").addEventListener("click", resetAll);
-
-    update();
+      let stage = "rest"; let runTimer = null; let runProgress = 0; let nextMeasure = "locked"; const records = {};
+      const $ = (id) => document.getElementById(id); const clamp = (v, min, max) => Math.max(min, Math.min(max, v)); const round = (v) => Math.round(v); const round1 = (v) => Math.round(v * 10) / 10;
+      function getInputs() { return { profile: $("profile").value, distanceKm: Number($("distance").value), minutes: Number($("minutes").value), recovery: Number($("recovery").value) }; }
+      function getRunMetrics(profileKey, distanceKm, minutes) {
+        const p = profiles[profileKey];
+        if (minutes <= 0 || distanceKm <= 0) return { speedMMin: 0, speedKmh: 0, vo2: 3.5, mets: 1, load: 0, label: "未开始", detail: "请设置跑步时间与距离" };
+        const speedMMin = (distanceKm * 1000) / minutes; const speedKmh = distanceKm / (minutes / 60); const vo2 = 0.2 * speedMMin + 3.5; const mets = vo2 / 3.5;
+        const vo2ReserveRatio = clamp((vo2 - 3.5) / Math.max(1, p.vo2max - 3.5), 0.05, 1.25); const load = clamp(vo2ReserveRatio * p.load, 0.05, 1.25);
+        let label = "慢跑"; let detail = "可以稳定说话，负荷较低";
+        if (speedKmh >= 12 || load > 0.82) { label = "激烈跑"; detail = "呼吸明显加快，心血管负荷较高"; }
+        else if (speedKmh >= 8 || load > 0.50) { label = "中等跑"; detail = "心率和呼吸会明显上升"; }
+        return { speedMMin, speedKmh, vo2, mets, load, label, detail };
+      }
+      function calculate(profileKey, distanceKm, minutes, recoveryMinute) {
+        const p = profiles[profileKey]; const m = getRunMetrics(profileKey, distanceKm, minutes); const reserveHR = 200 - p.restHR;
+        const peakHR = clamp(p.restHR + reserveHR * (0.28 + 0.72 * m.load), p.restHR, 205); const peakRR = clamp(p.restRR + 30 * m.load, p.restRR, 55); const peakSBP = clamp(p.restSBP + 58 * m.load, p.restSBP, 195);
+        const peakDBP = clamp(p.restDBP + (profileKey === "athlete" ? -4 : profileKey === "beginner" ? 5 : 0) * m.load, 55, 102);
+        const HR = p.restHR + (peakHR - p.restHR) * Math.exp(-p.k * recoveryMinute); const RR = p.restRR + (peakRR - p.restRR) * Math.exp(-(p.k * 0.70) * recoveryMinute);
+        const bpK = profileKey === "beginner" ? 0.23 : profileKey === "athlete" ? 0.46 : 0.34; const SBP = p.restSBP + (peakSBP - p.restSBP) * Math.exp(-bpK * recoveryMinute); const DBP = p.restDBP + (peakDBP - p.restDBP) * Math.exp(-0.38 * recoveryMinute);
+        const fatigue = clamp((HR - p.restHR) / 105 + (RR - p.restRR) / 36 + m.load * 0.18, 0, 1); return { HR: round(HR), RR: round(RR), SBP: round(SBP), DBP: round(DBP), fatigue, metrics: m };
+      }
+      function getRunState(profileKey, distanceKm, minutes, progress) {
+        const p = profiles[profileKey]; const peak = calculate(profileKey, distanceKm, minutes, 0); const factor = clamp(progress, 0, 1);
+        const HR = p.restHR + (peak.HR - p.restHR) * factor; const RR = p.restRR + (peak.RR - p.restRR) * factor; const SBP = p.restSBP + (peak.SBP - p.restSBP) * factor; const DBP = p.restDBP + (peak.DBP - p.restDBP) * factor;
+        const fatigue = clamp((HR - p.restHR) / 105 + (RR - p.restRR) / 36 + peak.metrics.load * 0.18, 0, 1); return { HR: round(HR), RR: round(RR), SBP: round(SBP), DBP: round(DBP), fatigue, metrics: peak.metrics };
+      }
+      function getRestState(profileKey) { const p = profiles[profileKey]; return { HR: p.restHR, RR: p.restRR, SBP: p.restSBP, DBP: p.restDBP, fatigue: 0, metrics: { speedKmh: 0, label: "安静", detail: "静息观察", load: 0 } }; }
+      function setBar(id, value, min, max) { const pct = clamp(((value - min) / (max - min)) * 100, 0, 100); $(id).style.width = pct + "%"; }
+      function updateButtons() { const input = getInputs(); const hasRest = Boolean(records.rest); const canRun = hasRest && input.minutes > 0 && input.distanceKm > 0; $("runBtn").disabled = !canRun || stage === "running"; $("restBtn").disabled = stage === "running"; $("profile").disabled = stage === "running"; $("distance").disabled = stage === "running"; $("minutes").disabled = stage === "running"; $("recovery").disabled = stage !== "measure"; $("nowBtn").disabled = nextMeasure !== "now"; $("m5Btn").disabled = nextMeasure !== "m5"; $("m10Btn").disabled = nextMeasure !== "m10"; }
+      function update() {
+        const input = getInputs(); const p = profiles[input.profile]; let state;
+        if (stage === "running") state = getRunState(input.profile, input.distanceKm, input.minutes, runProgress); else if (stage === "measure") state = calculate(input.profile, input.distanceKm, input.minutes, input.recovery); else state = getRestState(input.profile);
+        const metrics = getRunMetrics(input.profile, input.distanceKm, input.minutes); const runDuration = clamp(1.05 - metrics.load * 0.55, 0.38, 1.05);
+        $("subject").style.setProperty("--runDur", runDuration + "s"); $("head").className = "head " + p.faceClass; $("subject").classList.toggle("running", stage === "running"); $("torso").style.setProperty("--breath", String(1 + state.fatigue * 0.22)); $("torso").style.setProperty("--heartSpeed", String(clamp(1.25 - state.fatigue * 0.85, 0.38, 1.25)) + "s");
+        $("hrValue").innerHTML = `${state.HR}<span class="meterUnit">次/min</span>`; $("rrValue").innerHTML = `${state.RR}<span class="meterUnit">次/min</span>`; $("bpValue").innerHTML = `${state.SBP}/${state.DBP}<span class="meterUnit">mmHg</span>`; setBar("hrFill", state.HR, 50, 205); setBar("rrFill", state.RR, 10, 55); setBar("bpFill", state.SBP, 90, 195);
+        $("distanceText").textContent = round1(input.distanceKm) + " km"; $("minutesText").textContent = input.minutes + " 分钟"; $("recoveryText").textContent = input.recovery + " 分钟"; $("timerLabel").textContent = stage === "running" ? "跑步快进" : "恢复时间"; $("timeReadout").textContent = stage === "running" ? Math.round(runProgress * 100) + "%" : input.recovery + " min"; $("progressText").textContent = Math.round(runProgress * 100) + "%"; $("progressFill").style.width = Math.round(runProgress * 100) + "%"; $("runSummary").textContent = `速度：${round1(metrics.speedKmh)} km/h｜${metrics.label}`;
+        const cuePrefix = stage === "running" ? "正在跑步" : stage === "measure" ? "恢复测量" : "当前"; $("runCue").textContent = `${cuePrefix}：${metrics.label}｜${metrics.detail}`;
+        const label = stage === "rest" ? (records.rest ? "安静值已记录" : "先测安静值") : stage === "running" ? "跑步中" : "恢复测量"; const loadText = state.fatigue < 0.35 ? "接近安静" : state.fatigue < 0.7 ? "正在恢复" : "负荷偏高"; $("statusText").textContent = `状态：${label}｜${loadText}`; updateButtons();
+      }
+      function writeRecord(key, state) { records[key] = state; const prefix = key === "rest" ? "recRest" : key === "now" ? "recNow" : key === "m5" ? "rec5" : "rec10"; $(prefix + "HR").textContent = state.HR; $(prefix + "RR").textContent = state.RR; $(prefix + "BP").textContent = `${state.SBP}/${state.DBP}`; }
+      function recordRest() { if (stage === "running") return; const input = getInputs(); writeRecord("rest", getRestState(input.profile)); stage = "rest"; runProgress = 0; nextMeasure = "locked"; $("recovery").value = 0; update(); }
+      function startRun() { const input = getInputs(); if (!records.rest || stage === "running" || input.minutes <= 0 || input.distanceKm <= 0) return; clearInterval(runTimer); stage = "running"; nextMeasure = "locked"; runProgress = 0; $("recovery").value = 0; const virtualDurationMs = clamp(input.minutes * 360 + input.distanceKm * 250, 1600, 7000); const startTime = performance.now(); runTimer = setInterval(() => { const elapsed = performance.now() - startTime; runProgress = clamp(elapsed / virtualDurationMs, 0, 1); update(); if (runProgress >= 1) { clearInterval(runTimer); runTimer = null; stage = "measure"; nextMeasure = "now"; $("recovery").value = 0; update(); } }, 50); update(); }
+      function recordAt(key, minute) { if (nextMeasure !== key) return; const input = getInputs(); stage = "measure"; $("recovery").value = minute; const state = calculate(input.profile, input.distanceKm, input.minutes, minute); writeRecord(key, state); if (key === "now") nextMeasure = "m5"; if (key === "m5") nextMeasure = "m10"; if (key === "m10") nextMeasure = "done"; update(); }
+      function resetAll() { clearInterval(runTimer); runTimer = null; stage = "rest"; runProgress = 0; nextMeasure = "locked"; Object.keys(records).forEach(key => delete records[key]); $("profile").value = "normal"; $("distance").value = 1.0; $("minutes").value = 10; $("recovery").value = 0; ["recRest", "recNow", "rec5", "rec10"].forEach(prefix => { $(prefix + "HR").textContent = "—"; $(prefix + "RR").textContent = "—"; $(prefix + "BP").textContent = "—"; }); update(); }
+      ["profile", "distance", "minutes"].forEach(id => $(id).addEventListener("input", update)); $("recovery").addEventListener("input", update); $("restBtn").addEventListener("click", recordRest); $("runBtn").addEventListener("click", startRun); $("nowBtn").addEventListener("click", () => recordAt("now", 0)); $("m5Btn").addEventListener("click", () => recordAt("m5", 5)); $("m10Btn").addEventListener("click", () => recordAt("m10", 10)); $("resetBtn").addEventListener("click", resetAll); update();
+    })();
   </script>
 </body>
 </html>

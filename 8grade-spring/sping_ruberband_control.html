@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>彈性力學綜合模擬實驗 — 動畫示範版（對照組）</title>
+
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        html, body, #root { height:100%; margin:0; padding:0; overflow:hidden; background-color:#f8fafc; -webkit-tap-highlight-color:transparent; overscroll-behavior:none; }
+        body { font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; }
+        button, [role="button"] { touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+        .recharts-wrapper { font-family:sans-serif; }
+        .scroll-area { overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+        :root { --fs-h1:clamp(15px,1.8vw,20px); --fs-base:clamp(11px,1.1vw,14px); }
+        .tab-hidden { display:none !important; }
+        .tab-shown  { display:block; }
+        @media (pointer:coarse) { .btn-tap { min-height:44px; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ==========================================
+        // 0. 輕量導覽 Logger（記錄對照組觀看每一步的時間，供分析「觀看時長」用）
+        // ==========================================
+        const STORAGE_KEY = "ControlAnimationData";
+        let history_ = [];
+        const NavLogger = {
+            init(){ try{ const s=localStorage.getItem(STORAGE_KEY); if(s){const p=JSON.parse(s); if(Array.isArray(p)) history_=p;} }catch(e){} this.log('Initialize',{mode:'control_animation'}); },
+            log(action, details={}){ history_.push({ timestamp:new Date().toISOString(), action, details }); if(history_.length>800) history_.shift(); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(history_)); }catch(e){} }
+        };
+
+        const { useState, useEffect } = React;
+        const RechartsObj = window.Recharts || {};
+        const { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } = RechartsObj;
+
+        // --- Icons（沿用原版） ---
+        const Icon = ({ name, size = 18, className = "" }) => {
+            const icons = {
+                anchor: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>,
+                trendingUp: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+                minus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+                gitFork: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><line x1="12" y1="12" x2="12" y2="15"/></svg>,
+                beaker: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 3h15"/><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"/><path d="M6 14h12"/></svg>,
+                film: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>,
+                arrowLeft: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
+                arrowRight: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            };
+            return <span className={className}>{icons[name] || null}</span>;
+        };
+
+        // ==========================================
+        // 1. 物理引擎（與原模擬完全一致，無雜訊 → 對照組看到乾淨代表數據）
+        // ==========================================
+        const SPRING_L0 = 8.0, RUBBER_L0 = 6.0;
+        const extSpringSingle   = m => 0.04 * m;          // (m/1000*9.8/24.5)*100
+        const extSpringParallel = m => 0.02 * m;          // 並聯：等效 k 加倍 → 伸長減半
+
+        const extRubber = (targetMass) => {               // 與原版 calculateExtensionFromMass 相同
+            if (targetMass <= 0) return 0;
+            const L0 = RUBBER_L0, K1 = 40, K2 = 200, Jm = 40;
+            let lo = 0, hi = 35, mid = 0;
+            for (let i = 0; i < 50; i++) {
+                mid = (lo + hi) / 2;
+                const lam = (L0 + mid) / L0;
+                const J1 = lam*lam + 2/lam - 3;
+                let mc;
+                if (J1 >= Jm) mc = Infinity;
+                else mc = (K1 + K2/lam) * (lam - 1/(lam*lam)) * (Jm/(Jm - J1));
+                if (mc < targetMass) lo = mid; else hi = mid;
+            }
+            return mid;
+        };
+
+        const fitLine = (pts, mode) => {                  // 與原版最小平方法相同
+            const n = pts.length;
+            let sx=0, sy=0, sxy=0, sx2=0;
+            pts.forEach(p => { const x=p.totalLength, y=p.mass; sx+=x; sy+=y; sxy+=x*y; sx2+=x*x; });
+            const slope = (n*sxy - sx*sy) / (n*sx2 - sx*sx);
+            const intercept = (sy - slope*sx) / n;
+            const minL = Math.min(...pts.map(d=>d.totalLength)), maxL = Math.max(...pts.map(d=>d.totalLength));
+            const x1 = Math.max(0, minL*0.9), x2 = maxL*1.15;
+            return { slope: slope.toFixed(2), mode, points: [
+                { totalLength:+x1.toFixed(2), mass:+(slope*x1+intercept).toFixed(2) },
+                { totalLength:+x2.toFixed(2), mass:+(slope*x2+intercept).toFixed(2) }
+            ]};
+        };
+
+        // ==========================================
+        // 2. 腳本產生器：把「實驗組會做的操作」轉成一格一格的定格畫面
+        // ==========================================
+        // ---- 第六題：理想彈簧（單一 + 並聯，各 5 點，共 10 點上限；不顯示斜率）----
+        const genSpring = () => {
+            const frames = [];
+            let hist = [];
+            const massesS = [100,300,500,700,900];
+            massesS.forEach((m,i) => {
+                const ext = +extSpringSingle(m).toFixed(2), L = +(SPRING_L0+ext).toFixed(2);
+                hist = [...hist, { mode:'single', mass:m, extension:ext, totalLength:L }];
+                frames.push({ caption:`【單一彈簧】掛重 ${m} g，彈簧全長 ${L.toFixed(1)} cm —— 記錄第 ${i+1} 點`,
+                    mode:'single', isPanAttached:true, addedMass:m-100, totalMass:m, ext, length:L, history:hist.slice(), trendline:null });
+            });
+            const massesP = [100,300,500,700,900];
+            massesP.forEach((m,i) => {
+                const ext = +extSpringParallel(m).toFixed(2), L = +(SPRING_L0+ext).toFixed(2);
+                hist = [...hist, { mode:'parallel', mass:m, extension:ext, totalLength:L }];
+                frames.push({ caption:`【並聯彈簧】切換為並聯模式，掛重 ${m} g，全長 ${L.toFixed(1)} cm —— 記錄第 ${i+1} 點`,
+                    mode:'parallel', isPanAttached:true, addedMass:m-100, totalMass:m, ext, length:L, history:hist.slice(), trendline:null });
+            });
+            frames.push({ caption:`觀察完成。請比較單一與並聯在相同重量下的全長與伸長量差異，回答第 6 題（k₁、k₂ 與並聯為何伸長變小）。`,
+                mode:'parallel', isPanAttached:true, addedMass:800, totalMass:900, ext:+extSpringParallel(900).toFixed(2), length:+(SPRING_L0+extSpringParallel(900)).toFixed(2),
+                history:hist.slice(), trendline:null });
+            return frames;
+        };
+
+        // ---- 第七題：橡皮筋 100–1000 g（每 50 g 記一點），看斜率是否固定 ----
+        const genRubber2 = () => {
+            const frames = [];
+            let hist = [];
+            const masses = []; for (let m=100; m<=1000; m+=50) masses.push(m);
+            masses.forEach((m,i) => {
+                const ext = +extRubber(m).toFixed(2), L = +(RUBBER_L0+ext).toFixed(2);
+                hist = [...hist, { mass:m, totalLength:L }];
+                frames.push({ caption:`【橡皮筋】掛重 ${m} g，全長 ${L.toFixed(1)} cm —— 記錄第 ${i+1} 點`,
+                    isPanAttached:true, addedMass:m-100, totalMass:m, ext, length:L, history:hist.slice(), trendline:null });
+            });
+            frames.push({ caption:`對全部資料硬套一條直線趨勢線：可看到資料點呈彎曲、不貼合直線（代表斜率沿著線在改變）。`,
+                isPanAttached:true, addedMass:900, totalMass:1000, ext:+extRubber(1000).toFixed(2), length:+(RUBBER_L0+extRubber(1000)).toFixed(2),
+                history:hist.slice(), trendline:fitLine(hist,'rubber') });
+            frames.push({ caption:`觀察散布圖整體形狀與斜率變化，回答第 7 題（能否用同一個固定斜率描述整個範圍）。`,
+                isPanAttached:true, addedMass:900, totalMass:1000, ext:+extRubber(1000).toFixed(2), length:+(RUBBER_L0+extRubber(1000)).toFixed(2),
+                history:hist.slice(), trendline:fitLine(hist,'rubber') });
+            return frames;
+        };
+
+        // ---- 第八題：橡皮筋（每 50 g 記一點），分三區間比較斜率，找可近似理想彈簧的區間 ----
+        const genRubber3 = () => {
+            const frames = [];
+            let hist = [];
+            const masses = []; for (let m=100; m<=1000; m+=50) masses.push(m);
+            masses.forEach((m,i) => {
+                const ext = +extRubber(m).toFixed(2), L = +(RUBBER_L0+ext).toFixed(2);
+                hist = [...hist, { mass:m, totalLength:L }];
+                frames.push({ caption:`【橡皮筋】掛重 ${m} g，全長 ${L.toFixed(1)} cm —— 記錄第 ${i+1} 點`,
+                    isPanAttached:true, addedMass:m-100, totalMass:m, ext, length:L, history:hist.slice(), trendline:null });
+            });
+            // 區間一含 0 g（未掛重，自然長度 L0）資料點
+            const zeroPt = { mass:0, totalLength:RUBBER_L0 };
+            const seg1 = [zeroPt, ...hist.filter(d => d.mass <= 200)];
+            const seg2 = hist.filter(d => d.mass >= 200 && d.mass <= 500);
+            const seg3 = hist.filter(d => d.mass >= 500 && d.mass <= 1000);
+            // 區間上下界對應的「全長 L」位置（用來畫鉛直輔助線）
+            const Lof = m => +(RUBBER_L0 + extRubber(m)).toFixed(2);
+            const tl1 = fitLine(seg1,'rubber'); tl1.label = '區間一 0–200 g'; tl1.bounds = [{x:RUBBER_L0, m:0}, {x:Lof(200), m:200}];
+            const tl2 = fitLine(seg2,'rubber'); tl2.label = '區間二 200–500 g'; tl2.bounds = [{x:Lof(200), m:200}, {x:Lof(500), m:500}];
+            const tl3 = fitLine(seg3,'rubber'); tl3.label = '區間三 500–1000 g'; tl3.bounds = [{x:Lof(500), m:500}, {x:Lof(1000), m:1000}];
+            frames.push({ caption:`分段比較斜率（區間一）：0–200 g（含 0 g 資料點）的直線斜率 ≈ ${tl1.slope} g/cm。`,
+                isPanAttached:true, addedMass:100, totalMass:200, ext:+extRubber(200).toFixed(2), length:+(RUBBER_L0+extRubber(200)).toFixed(2),
+                history:hist.slice(), trendline:tl1 });
+            frames.push({ caption:`分段比較斜率（區間二）：200–500 g 的直線斜率 ≈ ${tl2.slope} g/cm。`,
+                isPanAttached:true, addedMass:400, totalMass:500, ext:+extRubber(500).toFixed(2), length:+(RUBBER_L0+extRubber(500)).toFixed(2),
+                history:hist.slice(), trendline:tl2 });
+            frames.push({ caption:`分段比較斜率（區間三）：500–1000 g 的直線斜率 ≈ ${tl3.slope} g/cm。`,
+                isPanAttached:true, addedMass:900, totalMass:1000, ext:+extRubber(1000).toFixed(2), length:+(RUBBER_L0+extRubber(1000)).toFixed(2),
+                history:hist.slice(), trendline:tl3 });
+            frames.push({ caption:`比較三個區間的斜率：哪一段的斜率最穩定、最接近固定比例（最像理想彈簧）？由此判斷上界與下界，回答第 8 題。`,
+                isPanAttached:true, addedMass:900, totalMass:1000, ext:+extRubber(1000).toFixed(2), length:+(RUBBER_L0+extRubber(1000)).toFixed(2),
+                history:hist.slice(), trendline:null });
+            return frames;
+        };
+
+        const SPRING_FRAMES = genSpring();
+        const R2_FRAMES = genRubber2();
+        const R3_FRAMES = genRubber3();
+
+        // ==========================================
+        // 3. 共用：底部「動畫導覽」面板（只有上一步 / 下一步）
+        // ==========================================
+        const StepNav = ({ step, total, onPrev, onNext, caption, accent }) => (
+            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200" style={{ flex:'0 0 auto' }}>
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                        <Icon name="film" size={16} className="text-indigo-500"/> 動畫示範導覽
+                    </h3>
+                    <span className="text-[11px] font-bold text-slate-500">步驟 {step+1} / {total}</span>
+                </div>
+                <p className="text-sm text-slate-700 mb-3 leading-relaxed min-h-[44px] bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">{caption}</p>
+                <div className="flex gap-2">
+                    <button onClick={onPrev} disabled={step===0}
+                        className="btn-tap flex-1 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 border border-slate-300 text-slate-700 active:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-sm">
+                        <Icon name="arrowLeft" size={16}/> 上一步
+                    </button>
+                    <button onClick={onNext} disabled={step===total-1}
+                        className={`btn-tap flex-[1.4] py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed text-sm ${accent}`}>
+                        下一步 <Icon name="arrowRight" size={16}/>
+                    </button>
+                </div>
+            </div>
+        );
+
+        // ==========================================
+        // 4. 第一部分：理想彈簧（動畫）
+        // ==========================================
+        const getModeLabel = m => m==='single' ? '單一彈簧' : (m==='parallel' ? '並聯模式' : m);
+        const getModeColor = m => m==='single' ? '#3b82f6' : (m==='parallel' ? '#10b981' : '#64748b');
+
+        const SpringSVG = ({ width, height, coils=12, color="#64748b", strokeWidth=2 }) => {
+            let d = `M ${width/2} 0 L ${width/2} 10 `;
+            let y = 10; const ch = (height-20)/coils;
+            for (let i=0;i<coils;i++){ d += `L ${width-2} ${y+ch/4} `; d += `L ${2} ${y+3*ch/4} `; y += ch; }
+            d += `L ${width/2} ${y} L ${width/2} ${height} `;
+            return <svg width={width} height={height} style={{overflow:'visible'}}><path d={d} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/></svg>;
+        };
+
+        const SpringAnim = ({ step, setStep }) => {
+            const frames = SPRING_FRAMES, f = frames[step];
+            const { mode, isPanAttached, addedMass, totalMass, length:currentLength, ext:currentExtension, history, trendline } = f;
+            const isMaxedOut = currentExtension > 50;
+            const PIXELS_PER_CM = 8;
+            const totalVisualHeight = currentLength * PIXELS_PER_CM;
+            const color = isMaxedOut ? "#ef4444" : "#475569";
+
+            const renderSprings = () => mode==='single'
+                ? <div className="flex justify-center" style={{height:`${totalVisualHeight}px`}}><SpringSVG width={28} height={totalVisualHeight} coils={15} color={color} strokeWidth={2.5}/></div>
+                : <div className="flex justify-center gap-3" style={{height:`${totalVisualHeight}px`}}><SpringSVG width={28} height={totalVisualHeight} coils={15} color={color} strokeWidth={2.5}/><SpringSVG width={28} height={totalVisualHeight} coils={15} color={color} strokeWidth={2.5}/></div>;
+
+            const dataSingle = history.filter(d=>d.mode==='single');
+            const dataParallel = history.filter(d=>d.mode==='parallel');
+
+            const go = (d) => { const ns = Math.min(frames.length-1, Math.max(0, step+d)); setStep(ns); NavLogger.log('Step',{tab:'spring', step:ns}); };
+
+            return (
+                <div className="font-sans text-slate-800 relative h-full flex flex-col">
+                    <div className="flex-1 min-h-0 grid gap-3 p-3 overflow-hidden" style={{ gridTemplateColumns:'minmax(320px, 5fr) minmax(360px, 7fr)', gridTemplateRows:'auto 1fr' }}>
+                        <div className="col-span-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                            <h1 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">⚙️ 理想彈簧虎克定律模擬
+                                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-mono border border-indigo-100">Linear (F=kx)</span>
+                            </h1>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                {[{id:'single',iconName:'minus',label:'單一'},{id:'parallel',iconName:'gitFork',label:'並聯'}].map(m=>{
+                                    const isActive = mode===m.id; const rotateClass = m.id==='parallel'?'rotate-180':'rotate-90';
+                                    return <div key={m.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs md:text-sm font-bold whitespace-nowrap ${isActive?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}><Icon name={m.iconName} size={14} className={rotateClass}/> {m.label}</div>;
+                                })}
+                            </div>
+                            <div className="flex gap-3 text-xs md:text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                <div className="flex flex-col items-center"><span className="font-bold text-base">{totalMass} g</span><span className="text-[10px] text-slate-400">總掛重</span></div>
+                                <div className="w-px bg-slate-200"></div>
+                                <div className="flex flex-col items-center"><span className={`font-bold text-base ${isMaxedOut?'text-red-600':'text-blue-600'}`}>{currentLength.toFixed(1)} cm</span><span className="text-[10px] text-slate-400">全長</span></div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex justify-center" style={{flex:'3 1 0', minHeight:0}}>
+                                <div className="absolute inset-0 pointer-events-none opacity-50" style={{backgroundImage:'linear-gradient(#cbd5e1 1px,transparent 1px),linear-gradient(90deg,#cbd5e1 1px,transparent 1px)', backgroundSize:'20px 20px'}}></div>
+                                <div className="absolute top-0 w-40 h-3 bg-slate-700 rounded-b-lg shadow-md z-10"></div>
+                                <div className="absolute left-3 top-3 bottom-3 w-10 border-r-2 border-slate-400 flex flex-col items-end py-1 pr-1 text-[10px] text-slate-400 font-mono">
+                                    {[...Array(15)].map((_,i)=>(<div key={i} className="flex-1 w-full border-b border-slate-200 flex items-end justify-end relative"><span className="absolute right-2 bottom-[-6px]">{i*4}</span><div className="w-2 h-px bg-slate-400"></div></div>))}
+                                </div>
+                                <div className="relative top-3 flex flex-col items-center transition-all duration-300 ease-out" style={{width:'120px'}}>
+                                    {renderSprings()}
+                                    <div className="w-full flex justify-center -mt-1"><div className="w-1 h-3 bg-gray-500 rounded-b-sm"></div></div>
+                                    {isPanAttached ? (
+                                        <div className="w-28 h-2 bg-gray-600 rounded mb-1 shadow-lg relative flex justify-center items-end">
+                                            <div className="absolute bottom-2 flex flex-col-reverse items-center gap-px">
+                                                <div className="w-20 h-4 bg-gray-500 rounded-sm border border-gray-600 flex items-center justify-center text-[10px] text-white opacity-80">秤盤 100g</div>
+                                                {addedMass>0 && <div className="w-16 max-h-[100px] bg-amber-600 rounded-sm border border-amber-700 flex items-center justify-center text-[10px] text-white shadow-sm px-2 py-0.5">+{addedMass}g</div>}
+                                            </div>
+                                        </div>
+                                    ) : <div className="text-[10px] text-slate-400 mt-1 font-mono bg-slate-100 px-2 py-0.5 rounded">秤盤已取下</div>}
+                                </div>
+                            </div>
+                            <StepNav step={step} total={frames.length} onPrev={()=>go(-1)} onNext={()=>go(1)} caption={f.caption} accent="bg-blue-600 active:bg-blue-700"/>
+                        </div>
+
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex:'3 1 0', minHeight:0}}>
+                                <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                                    <h3 className="font-bold text-slate-800 text-sm">📊 質量 vs 全長</h3>
+                                    <div className="flex gap-2 text-[10px]">
+                                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>單一</div>
+                                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>並聯</div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 w-full relative min-h-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ScatterChart margin={{top:10,right:15,bottom:15,left:10}}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                                            <XAxis type="number" dataKey="totalLength" name="全長" unit="cm" domain={[0,'auto']} label={{value:'彈簧全長 L (cm)',position:'insideBottomRight',offset:-8,style:{fontSize:11}}}/>
+                                            <YAxis type="number" dataKey="mass" name="重量" unit="g" domain={[0,1000]} ticks={[0,200,400,600,800,1000]} label={{value:'總質量 m (g)',angle:-90,position:'insideLeft',style:{fontSize:11}}}/>
+                                            <Tooltip cursor={{strokeDasharray:'3 3'}}/>
+                                            <Scatter name="單一彈簧" data={dataSingle} fill={getModeColor('single')} shape="circle"/>
+                                            <Scatter name="並聯模式" data={dataParallel} fill={getModeColor('parallel')} shape="square"/>
+                                            {trendline && <Scatter name="趨勢線" data={trendline.points} line={{stroke:'#ef4444',strokeWidth:2,strokeDasharray:'5 5'}} shape={()=>null}/>}
+                                        </ScatterChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex:'2 1 0', minHeight:0}}>
+                                <h3 className="font-bold text-slate-800 text-sm mb-2">📝 數據記錄表</h3>
+                                <div className="scroll-area flex-1 border rounded-lg min-h-0">
+                                    <table className="w-full text-xs text-left text-slate-600">
+                                        <thead className="text-[11px] text-slate-700 uppercase bg-slate-50 sticky top-0"><tr><th className="px-3 py-2">模式</th><th className="px-3 py-2">總質量 (g)</th><th className="px-3 py-2">全長 (cm)</th></tr></thead>
+                                        <tbody>
+                                            {history.length===0 ? <tr><td colSpan="3" className="px-4 py-6 text-center text-slate-400 italic">尚未記錄數據...</td></tr>
+                                            : history.map((row,i)=>(<tr key={i} className="bg-white border-b"><td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white" style={{backgroundColor:getModeColor(row.mode)}}>{getModeLabel(row.mode)}</span></td><td className="px-3 py-2 font-medium text-slate-900">{row.mass}</td><td className="px-3 py-2">{row.totalLength}</td></tr>))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 5. 第二/三部分：橡皮筋（動畫）
+        // ==========================================
+        const RubberAnim = ({ frames, step, setStep, accent, tabKey }) => {
+            const f = frames[step];
+            const { isPanAttached, addedMass, totalMass, length:currentLength, ext:currentExtension, history, trendline } = f;
+            const isLimitReached = currentExtension > 24;
+            const PIXELS_PER_CM = 9, RUBBER_WIDTH_BASE = 8;
+            const currentWidth = Math.max(2, RUBBER_WIDTH_BASE * (RUBBER_L0 / currentLength));
+            const color = currentExtension > 24 ? "#ef4444" : (currentExtension > 16 ? "#eab308" : "#22c55e");
+            const totalVisualHeight = currentLength * PIXELS_PER_CM;
+
+            const go = (d) => { const ns = Math.min(frames.length-1, Math.max(0, step+d)); setStep(ns); NavLogger.log('Step',{tab:tabKey, step:ns}); };
+
+            return (
+                <div className="font-sans text-slate-800 relative h-full flex flex-col">
+                    <div className="flex-1 min-h-0 grid gap-3 p-3 overflow-hidden" style={{ gridTemplateColumns:'minmax(320px, 5fr) minmax(360px, 7fr)', gridTemplateRows:'auto 1fr' }}>
+                        <div className="col-span-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                            <h1 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">🧪 橡皮筋彈力模擬實驗
+                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">Non-Linear (Mooney-Rivlin × Gent)</span>
+                            </h1>
+                            <div className="flex gap-3 text-xs md:text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                <div className="flex flex-col items-center"><span className="font-bold text-base">{totalMass} g</span><span className="text-[10px] text-slate-400">總質量</span></div>
+                                <div className="w-px bg-slate-200"></div>
+                                <div className="flex flex-col items-center"><span className={`font-bold text-base ${isLimitReached?'text-red-600':'text-blue-600'}`}>{currentLength.toFixed(1)} cm</span><span className="text-[10px] text-slate-400">全長</span></div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex justify-center" style={{flex:'3 1 0', minHeight:0}}>
+                                <div className="absolute inset-0 pointer-events-none opacity-50" style={{backgroundImage:'linear-gradient(#cbd5e1 1px,transparent 1px),linear-gradient(90deg,#cbd5e1 1px,transparent 1px)', backgroundSize:'20px 20px'}}></div>
+                                <div className="absolute top-0 w-40 h-3 bg-slate-700 rounded-b-lg shadow-md z-10"></div>
+                                <div className="absolute left-3 top-3 bottom-3 w-10 border-r-2 border-slate-400 flex flex-col items-end py-1 pr-1 text-[10px] text-slate-400 font-mono">
+                                    {[...Array(15)].map((_,i)=>(<div key={i} className="flex-1 w-full border-b border-slate-200 flex items-end justify-end relative"><span className="absolute right-2 bottom-[-6px]">{i*2}</span><div className="w-2 h-px bg-slate-400"></div></div>))}
+                                </div>
+                                <div className="relative top-3 flex flex-col items-center transition-all duration-300 ease-out" style={{width:'120px'}}>
+                                    <div style={{backgroundColor:color, width:`${currentWidth}px`, height:`${totalVisualHeight}px`, border:'1px solid rgba(0,0,0,0.1)', boxShadow:isLimitReached?'0 0 10px rgba(239,68,68,0.5)':'none', transition:'all 0.5s ease-out'}} className="rounded-full"></div>
+                                    <div className="w-full flex justify-center"><div className="w-1 h-3 bg-gray-400 rounded-b-sm"></div></div>
+                                    {isPanAttached ? (
+                                        <div className="w-28 h-2 bg-gray-600 rounded mb-1 shadow-lg relative flex justify-center items-end">
+                                            <div className="absolute bottom-2 flex flex-col-reverse items-center gap-px">
+                                                <div className="w-20 h-4 bg-gray-500 rounded-sm border border-gray-600 flex items-center justify-center text-[10px] text-white opacity-80">秤盤 100g</div>
+                                                {addedMass>0 && <div className="w-16 max-h-[100px] bg-amber-600 rounded-sm border border-amber-700 flex items-center justify-center text-[10px] text-white shadow-sm px-2 py-0.5">+{addedMass}g</div>}
+                                            </div>
+                                        </div>
+                                    ) : <div className="text-[10px] text-slate-400 mt-1 font-mono bg-slate-100 px-2 py-0.5 rounded">秤盤已取下</div>}
+                                </div>
+                                {isLimitReached && <div className="absolute top-12 right-4 bg-red-100 text-red-700 px-2 py-1 rounded-lg border border-red-200 shadow-sm flex items-center gap-1"><span className="text-[10px] font-bold">接近材料極限</span></div>}
+                            </div>
+                            <StepNav step={step} total={frames.length} onPrev={()=>go(-1)} onNext={()=>go(1)} caption={f.caption} accent={accent}/>
+                        </div>
+
+                        <div className="flex flex-col gap-3 min-h-0">
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex:'3 1 0', minHeight:0}}>
+                                <h3 className="font-bold text-slate-800 text-sm mb-2">📊 質量 vs 全長</h3>
+                                <div className="flex-1 w-full relative min-h-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ScatterChart margin={{top:10,right:15,bottom:15,left:10}}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                                            <XAxis type="number" dataKey="totalLength" name="全長" unit="cm" domain={[0,30]} label={{value:'橡皮筋全長 L (cm)',position:'insideBottomRight',offset:-8,style:{fontSize:11}}}/>
+                                            <YAxis type="number" dataKey="mass" name="重量" unit="g" domain={[0,1000]} ticks={[0,200,400,600,800,1000]} label={{value:'總質量 m (g)',angle:-90,position:'insideLeft',style:{fontSize:11}}}/>
+                                            <Tooltip cursor={{strokeDasharray:'3 3'}}/>
+                                            <Scatter name="橡皮筋拉伸" data={history} shape={(props)=><circle cx={props.cx} cy={props.cy} r={3} fill="#4f46e5"/>}/>
+                                            {trendline && trendline.bounds && trendline.bounds.map((b,bi)=>(
+                                                <ReferenceLine key={bi} x={b.x} stroke="#475569" strokeWidth={1.5} strokeDasharray="4 4"
+                                                    label={{ value:`${b.m}g`, position:'top', fill:'#475569', fontSize:10, fontWeight:'bold' }}/>
+                                            ))}
+                                            {trendline && <Scatter name="趨勢線" data={trendline.points} line={{stroke:'#ef4444',strokeWidth:2,strokeDasharray:'5 5'}} shape={()=>null} dataKey="mass"/>}
+                                        </ScatterChart>
+                                    </ResponsiveContainer>
+                                    {trendline && (
+                                        <div className="absolute top-1 left-12 bg-white/95 backdrop-blur border p-2 rounded-lg shadow-sm text-xs z-10 border-indigo-500">
+                                            <div className="font-bold flex items-center gap-1 text-indigo-600"><Icon name="trendingUp" size={12}/> {trendline.label || '趨勢分析'}</div>
+                                            <div className="font-bold text-slate-800 text-[11px]">斜率: {trendline.slope} g/cm</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{flex:'2 1 0', minHeight:0}}>
+                                <h3 className="font-bold text-slate-800 text-sm mb-2">📝 數據記錄表</h3>
+                                <div className="scroll-area flex-1 border rounded-lg min-h-0">
+                                    <table className="w-full text-xs text-left text-slate-600">
+                                        <thead className="text-[11px] text-slate-700 uppercase bg-slate-50 sticky top-0"><tr><th className="px-3 py-2">質量 (g)</th><th className="px-3 py-2">全長 (cm)</th></tr></thead>
+                                        <tbody>
+                                            {history.length===0 ? <tr><td colSpan="2" className="px-4 py-6 text-center text-slate-400 italic">尚未記錄數據...</td></tr>
+                                            : history.map((row,i)=>(<tr key={i} className="bg-white border-b"><td className="px-3 py-2 font-medium text-slate-900">{row.mass}</td><td className="px-3 py-2">{row.totalLength}</td></tr>))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 6. 主程式（保留三個分頁；各分頁記住自己的步驟）
+        // ==========================================
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('spring');
+            const [stepS, setStepS] = useState(0);
+            const [stepR2, setStepR2] = useState(0);
+            const [stepR3, setStepR3] = useState(0);
+            useEffect(() => { NavLogger.init(); }, []);
+            const switchTab = (t) => { setActiveTab(t); NavLogger.log('SwitchTab',{targetTab:t}); };
+
+            return (
+                <div className="h-full flex flex-col bg-slate-50 font-sans text-slate-800">
+                    <div className="bg-white border-b border-slate-200 shadow-sm flex-shrink-0">
+                        <div className="flex flex-row items-stretch px-2">
+                            <div className="text-sm md:text-base font-black text-indigo-700 py-2 px-2 flex items-center gap-2 whitespace-nowrap">
+                                <Icon name="beaker" size={20}/> <span className="hidden sm:inline">彈性力學綜合模擬</span>
+                                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full border border-indigo-100">動畫示範</span>
+                            </div>
+                            <div className="flex-1 flex overflow-x-auto">
+                                <button onClick={()=>switchTab('spring')} className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='spring'?'border-blue-500 text-blue-600 bg-blue-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>第一部分：理想彈簧 (Hooke)</button>
+                                <button onClick={()=>switchTab('rubber2')} className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='rubber2'?'border-emerald-500 text-emerald-600 bg-emerald-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>第二部分：橡皮筋（P2-1 用）</button>
+                                <button onClick={()=>switchTab('rubber3')} className={`btn-tap flex-1 md:flex-none px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-bold border-b-4 transition-colors whitespace-nowrap ${activeTab==='rubber3'?'border-amber-500 text-amber-600 bg-amber-50/50':'border-transparent text-slate-500 active:text-slate-700 active:bg-slate-50'}`}>第三部分：橡皮筋（P2-2 用）</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex-1 min-h-0 relative">
+                        <div className={`absolute inset-0 ${activeTab==='spring'?'tab-shown':'tab-hidden'}`}><SpringAnim step={stepS} setStep={setStepS}/></div>
+                        <div className={`absolute inset-0 ${activeTab==='rubber2'?'tab-shown':'tab-hidden'}`}><RubberAnim frames={R2_FRAMES} step={stepR2} setStep={setStepR2} accent="bg-emerald-600 active:bg-emerald-700" tabKey="rubber2"/></div>
+                        <div className={`absolute inset-0 ${activeTab==='rubber3'?'tab-shown':'tab-hidden'}`}><RubberAnim frames={R3_FRAMES} step={stepR3} setStep={setStepR3} accent="bg-amber-600 active:bg-amber-700" tabKey="rubber3"/></div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    </script>
+</body>
+</html>

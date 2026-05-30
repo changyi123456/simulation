@@ -91,7 +91,7 @@
         // ==========================================
         const { useState, useEffect, useMemo, useRef } = React;
         const RechartsObj = window.Recharts || {};
-        const { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip } = RechartsObj;
+        const { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } = RechartsObj;
 
         if (!window.Recharts) { console.error("Recharts Load Failed"); }
 
@@ -133,6 +133,8 @@
             const [isMaxedOut, setIsMaxedOut] = useState(false);
             const [trendline, setTrendline] = useState(null);
             const [totalRecordCount, setTotalRecordCount] = useState(0);
+            const [recordFlash, setRecordFlash] = useState(false);
+            useEffect(() => { if (!recordFlash) return; const t = setTimeout(() => setRecordFlash(false), 750); return () => clearTimeout(t); }, [recordFlash]);
 
             const isExperimentLocked = totalRecordCount >= 10;
             const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
@@ -239,6 +241,7 @@
                     setHistory(prev => [...prev, { mode, mass: totalMass, extension: newExt, totalLength: newLength }]
                         .sort((a,b) => a.mass - b.mass));
                     setTotalRecordCount(prev => prev + 1);
+                    setRecordFlash(true);
                     InteractionLogger.log('RecordDataPoint_Spring', { mode, mass: totalMass, totalLength: newLength });
                 } else {
                     showAlert("重複記錄", "這個質量的數據已經記錄過囉！");
@@ -426,7 +429,7 @@
                                 )}
                                 <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
                                     <Icon name="plus" size={16} className="text-blue-500"/> 控制台
-                                    <span className={`ml-auto text-[10px] font-bold ${isExperimentLocked ? 'text-red-500':'text-slate-500'}`}>已記錄: {totalRecordCount}/10</span>
+                                    <span className={`ml-auto px-3 py-1 rounded-lg font-extrabold text-lg border transition-all duration-200 ${recordFlash ? 'bg-amber-300 text-amber-900 border-amber-400 scale-125 ring-4 ring-amber-300' : (isExperimentLocked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-100 text-slate-700 border-slate-200')}`}>已記錄 {totalRecordCount}/10</span>
                                 </h3>
                                 <div className="flex gap-2 mb-2">
                                     <button onClick={() => {
@@ -574,10 +577,15 @@
             const [currentExtension, setCurrentExtension] = useState(0);
             const [history, setHistory] = useState([]);
             const [totalRecordCount, setTotalRecordCount] = useState(0);
+            const [recordFlash, setRecordFlash] = useState(false);
+            const [startSel, setStartSel] = useState(0);
+            const [endSel, setEndSel] = useState(0);
             const isExperimentLocked = totalRecordCount >= 30;
             const [isLimitReached, setIsLimitReached] = useState(false);
             const [trendline, setTrendline] = useState(null);
             const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
+            useEffect(() => { if (!recordFlash) return; const t = setTimeout(() => setRecordFlash(false), 750); return () => clearTimeout(t); }, [recordFlash]);
+            useEffect(() => { if (history.length > 0) { setStartSel(0); setEndSel(history.length - 1); } }, [history.length]);
 
             const totalMass = isPanAttached ? (PAN_MASS + addedMass) : 0;
             const currentLength = L0 + currentExtension;
@@ -630,26 +638,45 @@
             const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
             const handleConfirm = () => { if (dialog.onConfirm) dialog.onConfirm(); closeDialog(); };
 
-            const calculateTrendline = () => {
-                if (history.length < 2) {
-                    InteractionLogger.log('TrendlineInsufficient_Rubber', { currentCount: history.length, tabId });
-                    showAlert("數據不足", "請至少記錄兩個數據點以進行分析。");
+            const calculateTrendline = (ovStart, ovEnd) => {
+                const s = (ovStart !== undefined) ? ovStart : startSel;
+                const e = (ovEnd   !== undefined) ? ovEnd   : endSel;
+                let data = history;
+                let selStart = null, selEnd = null;
+                if (tabId === 3) {
+                    const a = Math.min(s, e), b = Math.max(s, e);
+                    data = history.slice(a, b + 1);
+                    selStart = history[a]; selEnd = history[b];
+                }
+                if (data.length < 2) {
+                    InteractionLogger.log('TrendlineInsufficient_Rubber', { currentCount: data.length, tabId });
+                    showAlert("數據不足", tabId === 3 ? "請選取至少兩個資料點（頭、尾不同）以計算區間斜率。" : "請至少記錄兩個數據點以進行分析。");
                     return;
                 }
-                const n = history.length;
+                const n = data.length;
                 let sumX=0,sumY=0,sumXY=0,sumX2=0;
-                history.forEach(pt => { const x=pt.totalLength,y=pt.mass; sumX+=x;sumY+=y;sumXY+=x*y;sumX2+=x*x; });
+                data.forEach(pt => { const x=pt.totalLength,y=pt.mass; sumX+=x;sumY+=y;sumXY+=x*y;sumX2+=x*x; });
                 const denom = n*sumX2 - sumX*sumX;
                 if (Math.abs(denom) < 0.0001) return;
                 const slope = (n*sumXY - sumX*sumY)/denom;
                 const intercept = (sumY - slope*sumX)/n;
-                const minLen = Math.min(...history.map(d=>d.totalLength));
-                const maxLen = Math.max(...history.map(d=>d.totalLength));
+                const minLen = Math.min(...data.map(d=>d.totalLength));
+                const maxLen = Math.max(...data.map(d=>d.totalLength));
                 const x1 = Math.max(0, minLen*0.9), y1 = slope*x1 + intercept;
                 const x2 = maxLen*1.15,             y2 = slope*x2 + intercept;
-                InteractionLogger.log('CalculateTrendline_Rubber', { slope: slope.toFixed(2), tabId });
+                const bounds = (tabId === 3 && selStart && selEnd)
+                    ? [{ x: selStart.totalLength, m: selStart.mass }, { x: selEnd.totalLength, m: selEnd.mass }]
+                    : null;
+                InteractionLogger.log('CalculateTrendline_Rubber', {
+                    slope: slope.toFixed(2), tabId,
+                    startMass: selStart ? selStart.mass : null,
+                    endMass:   selEnd   ? selEnd.mass   : null,
+                    nPoints: n
+                });
                 setTrendline({
                     slope: slope.toFixed(2),
+                    bounds,
+                    rangeLabel: (selStart && selEnd) ? `${selStart.mass}–${selEnd.mass} g` : null,
                     points: [
                         { totalLength: Number(x1.toFixed(2)), mass: Number(y1.toFixed(2)) },
                         { totalLength: Number(x2.toFixed(2)), mass: Number(y2.toFixed(2)) }
@@ -684,6 +711,7 @@
                     const newLength = parseFloat(currentLength.toFixed(2));
                     setHistory(prev => [...prev, { mass: totalMass, totalLength: newLength }].sort((a,b)=>a.mass-b.mass));
                     setTotalRecordCount(prev => prev + 1);
+                    setRecordFlash(true);
                     InteractionLogger.log('RecordDataPoint_Rubber', { mass: totalMass, totalLength: newLength, tabId });
                 } else {
                     showAlert("重複記錄", "這個質量的數據已經記錄過囉！");
@@ -805,7 +833,7 @@
                                 )}
                                 <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
                                     <Icon name="plus" size={16} className="text-blue-500"/> 控制台
-                                    <span className={`ml-auto text-[10px] font-bold ${isExperimentLocked?'text-red-500':'text-slate-500'}`}>已記錄: {totalRecordCount}/30</span>
+                                    <span className={`ml-auto px-3 py-1 rounded-lg font-extrabold text-lg border transition-all duration-200 ${recordFlash ? 'bg-amber-300 text-amber-900 border-amber-400 scale-125 ring-4 ring-amber-300' : (isExperimentLocked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-100 text-slate-700 border-slate-200')}`}>已記錄 {totalRecordCount}/30</span>
                                 </h3>
                                 <div className="flex gap-2 mb-2">
                                     <button onClick={() => { const ns = !isPanAttached; setIsPanAttached(ns); InteractionLogger.log('TogglePan_Rubber', { isAttached: ns, tabId }); }}
@@ -851,14 +879,17 @@
                                             <YAxis type="number" dataKey="mass" name="重量" unit="g" domain={[0,1000]} ticks={[0,200,400,600,800,1000]} label={{ value:'總質量 m (g)', angle:-90, position:'insideLeft', style:{fontSize:11} }}/>
                                             <Tooltip cursor={{ strokeDasharray:'3 3' }}/>
                                             <Scatter name="橡皮筋拉伸" data={history} shape={(props) => <circle cx={props.cx} cy={props.cy} r={3} fill="#4f46e5"/>}/>
+                                            {trendline && trendline.bounds && trendline.bounds.map((b,bi)=>(
+                                                <ReferenceLine key={bi} x={b.x} stroke="#475569" strokeWidth={1.5} strokeDasharray="4 4"
+                                                    label={{ value:`${b.m}g`, position:'top', fill:'#475569', fontSize:10, fontWeight:'bold' }}/>
+                                            ))}
                                             {trendline && <Scatter name="趨勢線" data={trendline.points} line={{ stroke:'#ef4444', strokeWidth:2, strokeDasharray:'5 5' }} shape={() => null} dataKey="mass"/>}
                                         </ScatterChart>
                                     </ResponsiveContainer>
                                     {trendline && (
                                         <div className="absolute top-1 left-12 bg-white/95 backdrop-blur border p-2 rounded-lg shadow-sm text-xs z-10 border-indigo-500">
-                                            <div className="font-bold flex items-center gap-1 text-indigo-600"><Icon name="trendingUp" size={12}/> 趨勢分析</div>
+                                            <div className="font-bold flex items-center gap-1 text-indigo-600"><Icon name="trendingUp" size={12}/> {trendline.rangeLabel ? `區間 ${trendline.rangeLabel}` : '趨勢分析'}</div>
                                             <div className="font-bold text-slate-800 text-[11px]">斜率: {trendline.slope} g/cm</div>
-                                            <div className="text-[9px] text-slate-500 max-w-[140px] mt-0.5">註：橡皮筋具非線性，<br/>不貼合直線是正常的</div>
                                         </div>
                                     )}
                                 </div>
@@ -867,11 +898,30 @@
                                 <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
                                     <h3 className="font-bold text-slate-800 text-sm">📝 數據記錄表</h3>
                                     <div className="flex gap-1">
-                                        <button onClick={calculateTrendline} disabled={history.length<2} className="btn-tap px-2 py-1 text-indigo-600 bg-indigo-50 active:bg-indigo-100 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"><Icon name="calculator" size={14}/>分析趨勢</button>
+                                        <button onClick={() => calculateTrendline()} disabled={history.length<2} className="btn-tap px-2 py-1 text-indigo-600 bg-indigo-50 active:bg-indigo-100 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"><Icon name="calculator" size={14}/>{tabId===3 ? '分析區間斜率' : '分析趨勢'}</button>
                                         <button onClick={exportData} disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-blue-600 active:bg-blue-50 rounded disabled:opacity-30"><Icon name="download" size={16}/></button>
                                         <button onClick={clearData}  disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-red-600  active:bg-red-50  rounded disabled:opacity-30"><Icon name="trash2" size={16}/></button>
                                     </div>
                                 </div>
+                                {tabId===3 && history.length>=2 && (
+                                    <div className="flex items-center gap-2 mb-2 text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1.5 flex-wrap">
+                                        <span className="font-bold text-indigo-700 whitespace-nowrap">區間斜率：</span>
+                                        <span className="text-slate-500">頭</span>
+                                        <select value={startSel}
+                                            onChange={e=>{ const v=+e.target.value; setStartSel(v); InteractionLogger.log('SelectIntervalStart_Rubber',{ tabId, idx:v, mass: history[v] && history[v].mass }); calculateTrendline(v, endSel); }}
+                                            className="border border-slate-300 rounded px-1.5 py-1 bg-white font-medium text-slate-700">
+                                            {history.map((d,i)=><option key={i} value={i}>{d.mass} g</option>)}
+                                        </select>
+                                        <span className="text-slate-400 font-bold">→</span>
+                                        <span className="text-slate-500">尾</span>
+                                        <select value={endSel}
+                                            onChange={e=>{ const v=+e.target.value; setEndSel(v); InteractionLogger.log('SelectIntervalEnd_Rubber',{ tabId, idx:v, mass: history[v] && history[v].mass }); calculateTrendline(startSel, v); }}
+                                            className="border border-slate-300 rounded px-1.5 py-1 bg-white font-medium text-slate-700">
+                                            {history.map((d,i)=><option key={i} value={i}>{d.mass} g</option>)}
+                                        </select>
+                                        <span className="text-[10px] text-slate-400 whitespace-nowrap">選好頭尾後按「分析區間斜率」</span>
+                                    </div>
+                                )}
                                 <div className="scroll-area flex-1 border rounded-lg min-h-0">
                                     <table className="w-full text-xs text-left text-slate-600">
                                         <thead className="text-[11px] text-slate-700 uppercase bg-slate-50 sticky top-0">

@@ -136,18 +136,18 @@
             const [recordFlash, setRecordFlash] = useState(false);
             useEffect(() => { if (!recordFlash) return; const t = setTimeout(() => setRecordFlash(false), 750); return () => clearTimeout(t); }, [recordFlash]);
 
-            const isExperimentLocked = totalRecordCount >= 10;
+            const isExperimentLocked = totalRecordCount >= 30;
             const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
 
             const totalMass = isPanAttached ? (PAN_MASS + addedMass) : 0;
             const currentLength = L0 + currentExtension;
 
             const currentModeCount = history.filter(d => d.mode === mode).length;
-            const isModeLimitReached = currentModeCount >= 10;
+            const isModeLimitReached = currentModeCount >= 30;
 
-            // 一次性記錄：實驗達 10 次上限的瞬間（控制台鎖定時刻）
+            // 一次性記錄：實驗達 30 次上限的瞬間（控制台鎖定時刻）
             useEffect(() => {
-                if (totalRecordCount === 10) {
+                if (totalRecordCount === 30) {
                     InteractionLogger.log('ExperimentLocked_Spring', { totalRecordCount });
                 }
             }, [totalRecordCount]);
@@ -204,7 +204,7 @@
             };
 
             const clearData = () => {
-                showConfirm("清除確認", "確定要清除所有彈簧實驗數據嗎？\n(注意：全域的 10 次實驗上限不會因此歸零)", () => {
+                showConfirm("清除確認", "確定要清除所有彈簧實驗數據嗎？\n(注意：全域的 30 次實驗上限不會因此歸零)", () => {
                     setHistory([]);
                     setTrendline(null);
                     InteractionLogger.log('ClearDataHistory_Spring');
@@ -231,7 +231,7 @@
                     return;
                 }
                 if (isModeLimitReached) {
-                    showAlert("模式次數上限", `「${getModeLabel(mode)}」已達 10 次記錄上限，請切換模式或清除數據再試。`);
+                    showAlert("模式次數上限", `「${getModeLabel(mode)}」已達 30 次記錄上限，請切換模式或清除數據再試。`);
                     return;
                 }
                 const exists = history.some(d => d.mass === totalMass && d.mode === mode);
@@ -425,11 +425,11 @@
                             {/* 控制面板 */}
                             <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative" style={{flex: '0 0 auto'}}>
                                 {isExperimentLocked && (
-                                    <div className="absolute -top-2 right-4 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold animate-pulse">已達 10 次上限</div>
+                                    <div className="absolute -top-2 right-4 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold animate-pulse">已達 30 次上限</div>
                                 )}
                                 <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
                                     <Icon name="plus" size={16} className="text-blue-500"/> 控制台
-                                    <span className={`ml-auto px-3 py-1 rounded-lg font-extrabold text-lg border transition-all duration-200 ${recordFlash ? 'bg-amber-300 text-amber-900 border-amber-400 scale-125 ring-4 ring-amber-300' : (isExperimentLocked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-100 text-slate-700 border-slate-200')}`}>已記錄 {totalRecordCount}/10</span>
+                                    <span className={`ml-auto px-3 py-1 rounded-lg font-extrabold text-lg border transition-all duration-200 ${recordFlash ? 'bg-amber-300 text-amber-900 border-amber-400 scale-125 ring-4 ring-amber-300' : (isExperimentLocked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-100 text-slate-700 border-slate-200')}`}>已記錄 {totalRecordCount}/30</span>
                                 </h3>
                                 <div className="flex gap-2 mb-2">
                                     <button onClick={() => {
@@ -460,7 +460,7 @@
                                     <button onClick={recordData}
                                         disabled={isExperimentLocked || isModeLimitReached}
                                         className={`btn-tap flex-[2] py-2 rounded-lg text-xs font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${(isExperimentLocked || isModeLimitReached) ? 'bg-slate-400 text-white' : 'bg-indigo-600 active:bg-indigo-700 text-white'}`}>
-                                        {isExperimentLocked ? '已達 10 次上限' : (isModeLimitReached ? '此模式已 10 次' : '記錄目前數據點')}
+                                        {isExperimentLocked ? '已達 30 次上限' : (isModeLimitReached ? '此模式已 30 次' : '記錄目前數據點')}
                                     </button>
                                 </div>
                             </div>
@@ -511,10 +511,6 @@
                                 <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
                                     <h3 className="font-bold text-slate-800 text-sm">📝 數據記錄表</h3>
                                     <div className="flex gap-1">
-                                        <button onClick={calculateTrendline} disabled={history.filter(d => d.mode === mode).length < 2}
-                                            className="btn-tap px-2 py-1 text-indigo-600 bg-indigo-50 active:bg-indigo-100 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed">
-                                            <Icon name="calculator" size={14}/> 分析模式
-                                        </button>
                                         <button onClick={exportData} disabled={history.length===0} className="btn-tap p-1.5 text-slate-600 active:text-blue-600 active:bg-blue-50 rounded disabled:opacity-30">
                                             <Icon name="download" size={16}/>
                                         </button>

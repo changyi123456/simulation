@@ -35,7 +35,7 @@
         let history_ = [];
         const NavLogger = {
             init(){ try{ const s=localStorage.getItem(STORAGE_KEY); if(s){const p=JSON.parse(s); if(Array.isArray(p)) history_=p;} }catch(e){} this.log('Initialize',{mode:'control_animation'}); },
-            log(action, details={}){ history_.push({ timestamp:new Date().toISOString(), action, details }); if(history_.length>800) history_.shift(); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(history_)); }catch(e){} }
+            log(action, details={}){ history_.push({ timestamp:new Date().toISOString(), action, details }); if(history_.length>800) history_.shift(); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(history_)); }catch(e){ console.error('[NavLogger] localStorage 寫入失敗，資料未儲存：', action, e); if(!NavLogger._warned){ NavLogger._warned=true; try{ alert('警告：互動資料無法寫入 localStorage（可能空間已滿或瀏覽器限制），後續紀錄將不會被儲存。'); }catch(_){} } } }
         };
 
         const { useState, useEffect } = React;

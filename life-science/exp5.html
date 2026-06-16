@@ -3,335 +3,322 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>坐骨神经－腓肠肌收缩模拟</title>
+<title>坐骨神经－腓肠肌实验模拟</title>
 <style>
-  :root{
-    --bg:#f6f1e8; --paper:#fbf8f2; --panel:#fffaf2; --panel2:#f4eee2; --line:#d9ccba;
-    --text:#26333a; --muted:#6b777d; --accent:#256f78; --accent2:#d17b46; --good:#3b8f6d; --warn:#cb8b3f; --bad:#c35a59;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:"Noto Sans SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;background:linear-gradient(180deg,#f6f1e8,#efe7da);color:var(--text)}
-  .app{max-width:1420px;margin:0 auto;padding:18px}
-  .header{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-bottom:14px}
-  .hero,.status{background:rgba(255,251,245,.94);border:1px solid #e1d5c6;border-radius:24px;padding:18px 20px;box-shadow:0 14px 34px rgba(62,45,26,.07)}
-  h1{margin:0 0 6px;font-size:32px;line-height:1.15}
-  .sub{margin:0;color:var(--muted);line-height:1.7;font-size:15px}
-  .status{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:center}
-  .pill{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:12px;text-align:center}
-  .pill b{display:block;font-size:24px;color:var(--accent);margin-bottom:3px}
-  .pill span{font-size:12px;color:var(--muted);font-weight:800}
-  .board{display:grid;grid-template-columns:minmax(760px,1.35fr) minmax(430px,.72fr);gap:14px;align-items:start}
-  .card{background:rgba(255,251,245,.94);border:1px solid #e1d5c6;border-radius:26px;box-shadow:0 14px 34px rgba(62,45,26,.07)}
-  .card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:18px 18px 10px}
-  .card-head h2{margin:0;font-size:20px}
-  .small{font-size:13px;color:var(--muted);line-height:1.55;margin-top:4px}
-  .stage{position:relative;margin:0 16px 16px;min-height:640px;border-radius:34px;overflow:hidden;background:#d3bfa2;border:1px solid #cdbb9e;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
-  .wood{position:absolute;inset:0;background:repeating-linear-gradient(176deg, rgba(109,81,44,.09) 0 2px, transparent 2px 28px),linear-gradient(180deg,#d8c3a6,#cfb798)}
-  .chips{position:absolute;left:18px;top:18px;display:flex;gap:10px;flex-wrap:wrap;z-index:4}
-  .chip{padding:9px 14px;border-radius:999px;background:rgba(255,250,241,.92);border:1px solid rgba(77,93,100,.15);font-weight:900;font-size:13px;color:#55646c}
-  .chip.good{color:var(--good);border-color:rgba(59,143,109,.25)}
-  .chip.warn{color:var(--warn);border-color:rgba(203,139,63,.28)}
-  .chip.bad{color:var(--bad);border-color:rgba(195,90,89,.28)}
-  svg#specimen{position:relative;z-index:1;display:block;width:100%;height:100%}
-  .anno{position:absolute;z-index:3;background:rgba(255,251,245,.88);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.7);box-shadow:0 10px 18px rgba(50,37,18,.08);padding:8px 10px;border-radius:16px;font-size:12px;line-height:1.38;color:#58656e;max-width:120px;pointer-events:none}
-  .a-bone{left:21%;top:46%}.a-nerve{left:45%;top:31%}.a-muscle{left:63%;top:53%}.a-trans{left:78%;top:17%}
-  .electrode{position:absolute;left:56%;top:18%;width:130px;height:95px;z-index:5;cursor:grab;touch-action:none;transform:translate(-50%,-50%)}
-  .electrode:active{cursor:grabbing}
-  .ring{position:absolute;left:50%;top:50%;width:108px;height:108px;border-radius:50%;border:3px dashed rgba(209,123,70,.0);transform:translate(-50%,-50%);pointer-events:none}
-  .ring.fire{animation:flash .7s ease-out}
-  @keyframes flash{0%{border-color:rgba(209,123,70,.8);transform:translate(-50%,-50%) scale(.55);opacity:1}100%{border-color:rgba(209,123,70,0);transform:translate(-50%,-50%) scale(1.3);opacity:0}}
-  .drop{position:absolute;width:12px;height:17px;border-radius:70% 70% 90% 90%;background:rgba(92,170,192,.76);z-index:6;animation:drop .82s ease-out forwards;pointer-events:none}
-  @keyframes drop{0%{transform:translateY(-50px) scale(.7);opacity:.15}80%{opacity:.9}100%{transform:translateY(36px) scale(1);opacity:0}}
-  .dry #muscleBody,.dry #nerveMain{filter:saturate(.6) brightness(.95)}
-  .fatigued #muscleBody{opacity:.8}
-  .contract #muscleGroup{transform:translateX(8px) scaleX(.91);transform-origin:72% 61%;transition:transform .08s ease-out}
-  #muscleGroup{transition:transform .2s ease-out}
-  .contract #leverArm{transform:rotate(-11deg);transform-origin:748px 152px;transition:transform .08s ease-out}
-  #leverArm{transition:transform .2s ease-out}
-  .right{display:grid;grid-template-rows:auto auto auto auto;gap:12px}
-  .control-panel{padding:14px 16px 16px}
-  .range{display:grid;grid-template-columns:120px 1fr 66px;gap:10px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:10px 12px;margin-bottom:10px}
-  .range label{font-weight:900;font-size:13px}
-  input[type=range]{width:100%;accent-color:var(--accent)}
-  .val{text-align:right;font-weight:900;color:var(--accent)}
-  .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-  button{border:0;border-radius:16px;padding:12px 13px;font-weight:900;font-size:14px;cursor:pointer;transition:.16s}
-  button:hover{transform:translateY(-1px)}
-  .btn-main{background:var(--accent);color:white;box-shadow:0 10px 22px rgba(37,111,120,.2)}
-  .btn-alt{background:var(--accent2);color:white;box-shadow:0 10px 22px rgba(209,123,70,.18)}
-  .btn-soft{background:#fff;color:var(--text);border:1px solid var(--line)}
-  .monitor{overflow:hidden}
-  .monitor-top{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#142126;color:#d7e9e7;font-size:12px;font-weight:900;border-radius:24px 24px 0 0}
-  .led{display:inline-block;width:10px;height:10px;border-radius:50%;background:#5a696e;margin-right:6px;vertical-align:-1px}
-  .led.on{background:#65d89d;box-shadow:0 0 10px rgba(101,216,157,.95)}
-  canvas{display:block;width:100%;height:255px;background:linear-gradient(#16252b,#101a1e)}
-  .panel-pad{padding:0 16px 16px}
-  .bars{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .gauge{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:10px}
-  .gtitle{display:flex;justify-content:space-between;font-size:12px;font-weight:900;color:var(--muted);margin-bottom:8px}
-  .bar{height:10px;border-radius:999px;background:#ddd2c2;overflow:hidden}.bar>i{display:block;height:100%;width:50%;background:linear-gradient(90deg,var(--accent),#6eb09d);border-radius:999px}.bar.red>i{background:linear-gradient(90deg,#cf806b,#b94747)}
-  .analysis{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 16px}
-  .info{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:11px}.info b{display:block;color:var(--accent);margin-bottom:5px;font-size:15px}.info p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
-  .literature{margin:0 16px 16px;padding:11px 12px;border:1px dashed rgba(37,111,120,.22);background:#f4efe4;border-radius:16px;color:#5f6b73;font-size:12px;line-height:1.6}.literature b{color:#1d6169}
-  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(18px);background:#223238;color:#fff;border-radius:16px;padding:12px 15px;font-size:14px;font-weight:900;opacity:0;pointer-events:none;transition:.2s;z-index:30;box-shadow:0 14px 30px rgba(0,0,0,.18);max-width:min(720px,calc(100vw - 28px));line-height:1.45}
-  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-  @media (max-width:1120px){.header{grid-template-columns:1fr}.board{grid-template-columns:1fr}.stage{min-height:560px}}
-  @media (max-width:760px){.status{grid-template-columns:1fr 1fr 1fr}.btn-grid,.analysis,.bars{grid-template-columns:1fr}.range{grid-template-columns:98px 1fr 56px}.a-bone{left:20%;top:50%}.a-nerve{left:44%;top:34%}.a-muscle{left:62%;top:58%}}
+:root{--bg:#eef5f8;--panel:#fff;--panel2:#f5f9fb;--line:#d7e2e8;--text:#23343d;--muted:#667a84;--accent:#2f8392;--accent2:#db7b43;--ok:#29936b;--bad:#c65a5a;--red:#d62c2c}
+*{box-sizing:border-box}body{margin:0;font-family:"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#eff7fa,#e5eef3);color:var(--text)}
+.app{height:100vh;max-width:1540px;margin:0 auto;padding:12px;display:grid;grid-template-rows:auto 1fr;gap:12px}.top{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}.card{background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 28px rgba(38,63,78,.08)}.hero{padding:18px 20px}.hero h1{margin:0 0 6px;font-size:30px;line-height:1.15}.hero p{margin:0;color:var(--muted);font-size:15px;line-height:1.62}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}.metric{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:12px;text-align:center}.metric b{display:block;color:var(--accent);font-size:24px;margin-bottom:4px}.metric span{font-size:12px;font-weight:800;color:var(--muted)}
+.main{min-height:0;display:grid;grid-template-columns:minmax(650px,1.05fr) minmax(620px,.95fr);gap:12px}.left{display:grid;min-height:0}.stage-card{padding:16px;display:flex;flex-direction:column;min-height:0}.head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.head h2{margin:0;font-size:20px}.small{font-size:13px;color:var(--muted);line-height:1.55}.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{font-size:12px;font-weight:900;padding:8px 11px;border-radius:999px;background:#f6fbfc;border:1px solid rgba(58,88,99,.16);color:#55666f}.chip.ok{color:var(--ok);border-color:rgba(41,147,107,.25)}.chip.warn{color:#b7791f;border-color:rgba(183,121,31,.25)}.chip.bad{color:var(--bad);border-color:rgba(198,90,90,.25)}
+.stage{position:relative;flex:1;min-height:500px;border-radius:28px;overflow:hidden;border:1px solid #c8d6dd;background:linear-gradient(180deg,#cfe7f4 0%,#beddec 48%,#e4edf2 48.2%,#dfe9ef 100%)}.curtain{position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.13) 0 70px,rgba(83,128,154,.035) 70px 140px)}#rig{position:relative;display:block;width:100%;height:100%;z-index:1}.anno{position:absolute;z-index:3;background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.9);box-shadow:0 8px 18px rgba(38,60,72,.08);border-radius:16px;padding:8px 10px;font-size:12px;color:#556871;line-height:1.34;pointer-events:none}.a-trans{left:62%;top:10%}.a-muscle{left:40%;top:38%}.a-fix{left:18%;top:70%}.a-electrode{left:56%;top:72%}.a-medlab{left:70%;top:78%}#muscleGroup{transition:transform .12s ease-out}.contract #muscleGroup{transform:translateY(-10px) scaleY(.88);transform-origin:62% 73%}.contract #leverNeedle{transform:rotate(-14deg);transform-origin:580px 111px}#leverNeedle{transition:transform .12s ease-out}
+.right{display:grid;grid-template-rows:minmax(340px,.9fr) auto auto;gap:12px;min-height:0}.graph-card{padding:12px 14px;display:flex;flex-direction:column;min-height:0}.graph-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}.graph-title h2{margin:0;font-size:18px}.graph-title span{color:var(--muted);font-size:12px;font-weight:900}canvas{display:block;width:100%;height:100%;min-height:300px;background:#fff;border:1px solid var(--line);border-radius:16px}.controls{padding:14px}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.tab{background:#fff;border:1px solid var(--line);color:var(--text)}.tab.active{background:var(--accent);color:#fff}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:10px}.field label{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:900;margin-bottom:6px}.field b{color:var(--accent)}input[type=range]{width:100%;accent-color:var(--accent)}.fixed{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.fixed div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px;text-align:center;font-size:12px;color:var(--muted)}.fixed b{display:block;color:var(--text);font-size:14px}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}button{border:0;border-radius:15px;padding:11px 12px;font-size:14px;font-weight:900;cursor:pointer;transition:.15s}button:hover{transform:translateY(-1px)}.primary{background:var(--accent);color:#fff}.orange{background:var(--accent2);color:#fff}.soft{background:#fff;border:1px solid var(--line);color:var(--text)}.results{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}.res{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:10px}.res b{display:block;font-size:18px;color:var(--accent)}.res span{font-size:12px;font-weight:800;color:var(--muted)}.note{padding:0 14px 14px;color:#5f717a;font-size:12px;line-height:1.55}.note b{color:#245e69}.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(18px);background:#22343b;color:#fff;border-radius:16px;padding:12px 15px;font-weight:900;opacity:0;transition:.2s;pointer-events:none;z-index:50;box-shadow:0 12px 26px rgba(0,0,0,.16);max-width:min(760px,calc(100vw - 28px));line-height:1.45}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.mode-panel{display:none}.mode-panel.active{display:block}@media(max-width:1220px){.app{height:auto}.top,.main{grid-template-columns:1fr}.right{grid-template-rows:auto auto auto}canvas{height:360px}.stage{min-height:520px}}@media(max-width:760px){.metrics,.grid,.fixed,.buttons,.results{grid-template-columns:1fr}.hero h1{font-size:24px}}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="header">
-    <div class="hero">
-      <h1>坐骨神经－腓肠肌：实体实验前互动模拟</h1>
-      <p class="sub">标本区块依照你提供的黑白解剖图相对位置重新排布：<b>股骨在左下到左上斜伸、坐骨神经位于股骨后上侧并终止于膝部附近、腓肠肌位于右下方、跟腱连到右上方换能器</b>。右侧保留最必要的刺激强度、刺激频率与张力调节，让学生先看懂单收缩、总和与强直收缩。</p>
-    </div>
-    <div class="status">
-      <div class="pill"><b id="liveForce">0.00</b><span>瞬时张力 g</span></div>
-      <div class="pill"><b id="modeTxt">单收缩</b><span>当前收缩形式</span></div>
-      <div class="pill"><b id="qualityTxt">良好</b><span>标本状态</span></div>
-    </div>
+  <div class="top">
+    <section class="card hero">
+      <h1>坐骨神经－腓肠肌实验模拟</h1>
+      <p></p>
+    </section>
+    <section class="card metrics">
+      <div class="metric"><b id="mMode">幅度递增</b><span>当前实验</span></div>
+      <div class="metric"><b id="mPeak">--</b><span>峰值张力</span></div>
+      <div class="metric"><b id="mState">待测</b><span>波形判断</span></div>
+    </section>
   </div>
 
-  <div class="board">
-    <section class="card">
-      <div class="card-head">
-        <div>
-          <h2>实验台与标本</h2>
-          <div class="small">拖曳锌铜弓到橙色虚线的“坐骨神经刺激接触区”，或按右侧按钮自动对准。肌肉收缩时会牵动跟腱与张力换能器，曲线同步描记。</div>
-        </div>
+  <div class="main">
+    <section class="card stage-card">
+      <div class="head">
+        <div><h2>立式实验装置</h2><div class="small">MedLab 刺激输出经导线送到下端电极区，刺激坐骨神经；腓肠肌收缩后牵动上方张力换能器。右侧数据图会像真实 MedLab 一样即时描记：每次电刺激都会产生一个波形，系统会自动逐次增加强度或频率直到最大值。</div></div>
+        <div class="chips"><span class="chip ok">MedLab：刺激输出</span><span class="chip ok">换能器：记录张力</span><span class="chip ok" id="moistChip">任氏液：保持湿润</span><span class="chip ok" id="sampleChip">样本：可测量</span></div>
       </div>
       <div class="stage" id="stage">
-        <div class="wood"></div>
-        <div class="chips">
-          <span class="chip" id="chipContact">锌铜弓：尚未接触神经</span>
-          <span class="chip good" id="chipMoist">任氏液：维持湿润</span>
-          <span class="chip" id="chipTension">跟腱连线：松紧适当</span>
-        </div>
-        <div class="anno a-bone">股骨固定</div>
-        <div class="anno a-nerve">坐骨神经<br>刺激接触区</div>
-        <div class="anno a-muscle">腓肠肌<br>收缩主体</div>
-        <div class="anno a-trans">张力换能器<br>记录拉力</div>
-
-        <svg id="specimen" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid meet" aria-label="坐骨神经腓肠肌标本">
-          <defs>
-            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#3b2a1a" flood-opacity=".22"/></filter>
-            <linearGradient id="dishGrad" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#f8f7f2" stop-opacity=".85"/><stop offset=".55" stop-color="#d8e8e8" stop-opacity=".58"/><stop offset="1" stop-color="#c8dbdc" stop-opacity=".42"/></linearGradient>
-            <radialGradient id="liquidGrad" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#d4e1e0" stop-opacity=".58"/><stop offset="1" stop-color="#bdd4d4" stop-opacity=".16"/></radialGradient>
-            <linearGradient id="boneGrad" x1="0" x2="1"><stop offset="0" stop-color="#ebddba"/><stop offset=".52" stop-color="#f6eccd"/><stop offset="1" stop-color="#dcc68e"/></linearGradient>
-            <linearGradient id="muscleGrad" x1="0" x2="1"><stop offset="0" stop-color="#bc595d"/><stop offset=".45" stop-color="#e79880"/><stop offset="1" stop-color="#9a434e"/></linearGradient>
-            <pattern id="fiberPattern" width="18" height="12" patternUnits="userSpaceOnUse"><path d="M0 6 Q4 1 9 6 T18 6" fill="none" stroke="#7d2e38" stroke-opacity=".22" stroke-width="1.5"/></pattern>
-            <linearGradient id="tendonGrad" x1="0" x2="1"><stop offset="0" stop-color="#f1deb1"/><stop offset="1" stop-color="#f8ebc9"/></linearGradient>
-          </defs>
-
-          <ellipse cx="450" cy="330" rx="408" ry="258" fill="url(#dishGrad)" filter="url(#softShadow)"/>
-          <ellipse cx="450" cy="330" rx="377" ry="228" fill="none" stroke="rgba(255,255,255,.68)" stroke-width="4"/>
-          <ellipse cx="450" cy="338" rx="340" ry="194" fill="url(#liquidGrad)"/>
-
-          <g id="boneGroup" filter="url(#softShadow)">
-            <path d="M250 406 C280 384 322 354 364 322 C405 291 439 266 462 254 C479 245 495 249 503 263 C511 278 500 293 478 308 C444 331 406 360 365 393 C328 423 295 446 274 440 C256 435 244 420 250 406Z" fill="url(#boneGrad)" stroke="#bda577" stroke-width="2"/>
-            <ellipse cx="480" cy="270" rx="23" ry="15" fill="#fff4cf" stroke="#bda577" stroke-width="2"/>
-            <ellipse cx="252" cy="412" rx="21" ry="18" fill="#f5e1b2" stroke="#bda577" stroke-width="2"/>
-            <rect x="185" y="365" width="86" height="78" rx="16" fill="#61717b"/>
-            <rect x="198" y="380" width="48" height="20" rx="8" fill="#89969f"/>
-            <path d="M236 398 h25" stroke="#435058" stroke-width="9" stroke-linecap="round"/>
-            <circle cx="236" cy="398" r="11" fill="#4c5860"/>
-            <path id="proximalLink" d="M458 290 C478 294 496 303 516 320 C534 336 544 352 551 369 C534 376 512 375 491 366 C471 357 457 342 449 323 C445 313 447 296 458 290Z" fill="url(#tendonGrad)" stroke="#c8af7d" stroke-width="1.8" opacity=".98"/>
-          </g>
-
-          <g id="nerveGroup" filter="url(#softShadow)">
-            <path id="nerveMain" d="M350 233 C390 224 431 224 468 237 C492 246 513 258 531 275 C546 289 560 304 579 319" fill="none" stroke="#ebca54" stroke-width="9" stroke-linecap="round"/>
-            <path d="M350 233 C390 224 431 224 468 237 C492 246 513 258 531 275 C546 289 560 304 579 319" fill="none" stroke="#8e7330" stroke-width="1.5" stroke-linecap="round" opacity=".62"/>
-            <ellipse id="contactZone" cx="507" cy="271" rx="52" ry="37" fill="rgba(212,122,67,.16)" stroke="rgba(212,122,67,.58)" stroke-width="2" stroke-dasharray="8 8"/>
-          </g>
-
-          <g id="muscleGroup" filter="url(#softShadow)">
-            <path id="muscleBody" d="M500 320 C546 295 619 296 676 320 C725 341 757 374 764 411 C771 447 753 476 716 493 C668 516 593 513 533 486 C481 462 447 423 445 389 C443 360 462 337 500 320Z" fill="url(#muscleGrad)" stroke="#7e2f39" stroke-width="2.6"/>
-            <path d="M500 320 C546 295 619 296 676 320 C725 341 757 374 764 411 C771 447 753 476 716 493 C668 516 593 513 533 486 C481 462 447 423 445 389 C443 360 462 337 500 320Z" fill="url(#fiberPattern)" opacity=".95"/>
-            <path d="M512 350 C572 336 647 343 715 374" fill="none" stroke="#f5b09a" stroke-width="4" opacity=".5"/>
-            <path d="M502 392 C574 390 654 408 726 438" fill="none" stroke="#722c37" stroke-width="3" opacity=".35"/>
-            <path d="M500 431 C565 451 639 459 704 457" fill="none" stroke="#ffd0bd" stroke-width="3" opacity=".32"/>
-            <path id="tendon" d="M732 416 C773 390 804 340 825 279" fill="none" stroke="url(#tendonGrad)" stroke-width="14" stroke-linecap="round"/>
-            <path d="M826 279 C838 238 843 201 843 166" stroke="#efe2bf" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="7 7"/>
-          </g>
-
-          <g id="electrodePads" opacity=".92">
-            <circle cx="492" cy="271" r="6" fill="#d78a3b"/>
-            <circle cx="520" cy="278" r="6" fill="#9a8b59"/>
-          </g>
-
-          <g id="leverGroup" filter="url(#softShadow)">
-            <rect x="792" y="80" width="108" height="94" rx="16" fill="#5f727c"/>
-            <rect x="813" y="102" width="62" height="20" rx="8" fill="#a3b1b7"/>
-            <path id="leverArm" d="M748 152 H844" stroke="#344249" stroke-width="10" stroke-linecap="round"/>
-            <circle cx="748" cy="152" r="10" fill="#29353b"/>
-            <path d="M864 154 v-52" stroke="#8d999f" stroke-width="5"/>
-            <text x="858" y="48" font-size="14" text-anchor="middle" fill="#2f3b41" font-weight="700">换能器</text>
-          </g>
+        <div class="curtain"></div>
+        <div class="anno a-trans">张力换能器<br>接收拉力</div><div class="anno a-muscle">坐骨神经－腓肠肌标本<br>立式悬挂</div><div class="anno a-fix">肌动器 / 股骨固定</div><div class="anno a-electrode">刺激电极<br>接下端神经 / 腱旁</div><div class="anno a-medlab">MedLab<br>刺激输出</div>
+        <svg id="rig" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid meet">
+          <defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#2e4655" flood-opacity=".22"/></filter><linearGradient id="metal" x1="0" x2="1"><stop offset="0" stop-color="#dfe7eb"/><stop offset=".5" stop-color="#98aab5"/><stop offset="1" stop-color="#e8eef2"/></linearGradient><linearGradient id="muscleG" x1="0" x2="1"><stop offset="0" stop-color="#f2d0d5"/><stop offset=".55" stop-color="#f7e6eb"/><stop offset="1" stop-color="#d9a5af"/></linearGradient><linearGradient id="tendonG" x1="0" x2="1"><stop offset="0" stop-color="#f8e6b7"/><stop offset="1" stop-color="#fff0cf"/></linearGradient><linearGradient id="wireRed" x1="0" x2="1"><stop offset="0" stop-color="#dd5b59"/><stop offset="1" stop-color="#ee7d79"/></linearGradient><linearGradient id="wireBlk" x1="0" x2="1"><stop offset="0" stop-color="#353d44"/><stop offset="1" stop-color="#1d2328"/></linearGradient></defs>
+          <rect x="0" y="480" width="900" height="120" fill="#d6e3ea"/><rect x="0" y="490" width="900" height="110" fill="#dde8ee"/><rect x="36" y="493" width="828" height="10" fill="#d3dde3" opacity=".75"/>
+          <rect x="602" y="54" width="10" height="458" fill="url(#metal)" filter="url(#shadow)"/><circle cx="607" cy="130" r="4" fill="#80919a"/><circle cx="607" cy="240" r="4" fill="#80919a"/><circle cx="607" cy="352" r="4" fill="#80919a"/>
+          <g filter="url(#shadow)"><rect x="545" y="92" width="126" height="34" rx="8" fill="#6d8089"/><rect x="534" y="100" width="56" height="24" rx="6" fill="#49585f"/><rect x="657" y="99" width="24" height="24" rx="3" fill="#8e9ea6"/><text x="690" y="105" font-size="13" font-weight="700" fill="#33424a">张力换能器</text></g>
+          <path d="M565 92 L525 44 L420 42" stroke="#262f35" stroke-width="4" fill="none"/><path d="M578 126 L578 146" stroke="#222b31" stroke-width="2.4"/><path id="thread" d="M578 146 L578 168" stroke="#222b31" stroke-width="2.2"/>
+          <g filter="url(#shadow)"><polygon points="192,392 442,392 486,462 236,462" fill="#6b7a83"/><polygon points="205,405 430,405 462,452 238,452" fill="#56656e"/><text x="126" y="430" font-size="15" font-weight="700" fill="#2b3a42">肌动器</text></g>
+          <g filter="url(#shadow)"><rect x="296" y="386" width="42" height="66" rx="8" fill="#d4dde2" stroke="#83959f"/><rect x="307" y="392" width="20" height="46" rx="5" fill="#8c99a1"/></g>
+          <g filter="url(#shadow)"><rect x="430" y="402" width="82" height="38" rx="8" fill="#ccd5db" stroke="#8798a1"/><circle cx="452" cy="421" r="9" fill="#4c5860"/><circle cx="486" cy="421" r="9" fill="#4c5860"/><path d="M452 421 L452 388" stroke="#2a3137" stroke-width="2.2"/><path d="M486 421 L486 388" stroke="#2a3137" stroke-width="2.2"/></g>
+          <g id="muscleGroup" filter="url(#shadow)"><path d="M578 168 C578 176 578 183 578 190" stroke="url(#tendonG)" stroke-width="10" stroke-linecap="round"/><path id="muscleBody" d="M578 190 C548 194 526 217 521 252 C515 294 521 340 536 372 C548 396 567 410 585 410 C606 410 624 393 635 366 C648 335 652 286 646 246 C640 214 620 193 592 188 C588 188 583 188 578 190 Z" fill="url(#muscleG)" stroke="#c6969f" stroke-width="2.4"/><path d="M574 214 C554 254 555 352 581 389" stroke="#ecf8fb" stroke-width="2.2" opacity=".75" fill="none"/><path d="M607 211 C623 245 626 350 605 390" stroke="#d8b4bb" stroke-width="2.4" opacity=".72" fill="none"/><path d="M544 352 C529 372 514 390 498 404 C491 410 487 416 486 421" stroke="#e6c24c" stroke-width="8" stroke-linecap="round" fill="none"/><path d="M544 352 C529 372 514 390 498 404 C491 410 487 416 486 421" stroke="#856a2c" stroke-width="1.2" stroke-linecap="round" opacity=".55" fill="none"/><path d="M584 410 C584 423 583 433 582 442 C579 455 566 462 548 462" stroke="url(#tendonG)" stroke-width="10" stroke-linecap="round" fill="none"/><ellipse cx="540" cy="462" rx="20" ry="10" fill="#e6ddb5" stroke="#b9aa73" stroke-width="1.5"/></g>
+          <path d="M548 462 L338 462" stroke="#8f9ba2" stroke-width="2" opacity=".45"/>
+          <g filter="url(#shadow)"><rect x="652" y="420" width="154" height="82" rx="16" fill="#2f5a6d"/><text x="729" y="447" text-anchor="middle" font-size="17" font-weight="800" fill="#eef7fa">MedLab</text><text x="729" y="476" text-anchor="middle" font-size="14" font-weight="700" fill="#d7ebf0">刺激输出</text><rect x="670" y="440" width="55" height="18" rx="7" fill="#7dbbd1" opacity=".88"/><circle cx="763" cy="458" r="10" fill="#d0dbe0"/><circle cx="789" cy="458" r="10" fill="#d0dbe0"/></g>
+          <path d="M681 420 C646 394 613 386 582 400 C562 409 552 428 548 442" stroke="url(#wireBlk)" stroke-width="5" fill="none"/><path d="M705 420 C671 398 635 388 598 402 C575 411 559 430 548 442" stroke="url(#wireRed)" stroke-width="5" fill="none"/>
+          <path id="leverNeedle" d="M589 108 L618 96" stroke="#dcecf2" stroke-width="3" stroke-linecap="round"/>
         </svg>
-
-        <div class="electrode" id="electrode" title="拖曳锌铜弓到神经接触区">
-          <div class="ring" id="ring"></div>
-          <svg viewBox="0 0 130 95" width="130" height="95">
-            <path d="M26 63 C22 26 49 12 64 39 C81 8 111 28 101 64" fill="none" stroke="#6c4d2d" stroke-width="7" stroke-linecap="round"/>
-            <path d="M26 63 C22 26 49 12 64 39" fill="none" stroke="#c57d3e" stroke-width="4" stroke-linecap="round"/>
-            <path d="M64 39 C81 8 111 28 101 64" fill="none" stroke="#c8ceb8" stroke-width="4" stroke-linecap="round"/>
-            <circle cx="25" cy="64" r="11" fill="#c57d3e" stroke="#7b4a23" stroke-width="2"/>
-            <circle cx="102" cy="64" r="11" fill="#d0d6bf" stroke="#8b8f7d" stroke-width="2"/>
-            <text x="64" y="88" text-anchor="middle" font-size="12" font-weight="900" fill="#39474e">锌铜弓</text>
-          </svg>
-        </div>
       </div>
     </section>
 
     <section class="right">
-      <section class="card control-panel">
-        <div class="range"><label for="strength">刺激强度</label><input id="strength" type="range" min="0" max="5" step="0.05" value="1.50"><div class="val"><span id="strengthVal">1.50</span> V</div></div>
-        <div class="range"><label for="freq">刺激频率</label><input id="freq" type="range" min="1" max="30" step="1" value="5"><div class="val"><span id="freqVal">5</span> Hz</div></div>
-        <div class="range"><label for="tension">跟腱张力</label><input id="tension" type="range" min="0" max="100" step="1" value="55"><div class="val" id="tensionVal">适中</div></div>
-        <div class="btn-grid">
-          <button class="btn-main" id="alignBtn">对准神经接触区</button>
-          <button class="btn-alt" id="wetBtn">滴加任氏液</button>
-          <button class="btn-main" id="singleBtn">单次刺激</button>
-          <button class="btn-main" id="trainBtn">连续刺激 3 秒</button>
-          <button class="btn-soft" id="restBtn">休息恢复</button>
-          <button class="btn-soft" id="resetBtn">重新开始</button>
-        </div>
-      </section>
+      <section class="card graph-card"><div class="graph-title"><h2>数据图 / MedLab 骨骼肌力学分析</h2><span id="graphInfo">等待开始测量</span></div><canvas id="plot" width="760" height="360"></canvas></section>
+      <section class="card controls">
+        <div class="tabs"><button class="tab active" id="ampTab">幅度递增测量</button><button class="tab" id="freqTab">频率递增测量</button></div>
 
-      <section class="card monitor">
-        <div class="monitor-top"><span><i class="led" id="led"></i>张力描记</span><span id="readout">0.00 g｜0.00 s</span></div>
-        <canvas id="trace" width="520" height="255"></canvas>
-      </section>
-
-      <section class="card panel-pad">
-        <div class="bars">
-          <div class="gauge"><div class="gtitle"><span>湿润度</span><span id="moistTxt">100%</span></div><div class="bar"><i id="moistBar" style="width:100%"></i></div></div>
-          <div class="gauge"><div class="gtitle"><span>疲劳</span><span id="fatigueTxt">0%</span></div><div class="bar red"><i id="fatigueBar" style="width:0%"></i></div></div>
+        <div class="mode-panel active" id="ampPanel">
+          <div class="grid">
+            <div class="field"><label>最终幅度 <b><span id="ampEndText">2.00</span> V</b></label><input id="ampEnd" type="range" min="0.2" max="2.5" step="0.1" value="2.0"></div>
+            <div class="field"><label>强度间隔 <b><span id="ampStepText">0.01</span> V</b></label><input id="ampStep" type="range" min="0.01" max="0.05" step="0.01" value="0.01"></div>
+          </div>
+          <div class="fixed"><div><b>0 V</b>起始强度</div><div><b>5 ms</b>刺激波宽</div><div><b>0.10 V</b>阈强度</div><div><b id="ampNowText">0.00 V</b>当前输出</div></div>
         </div>
-      </section>
 
-      <section class="card">
-        <div class="analysis">
-          <div class="info"><b id="phaseTitle">单收缩三时相</b><p id="phaseText">单次阈上刺激后，曲线依次呈现潜伏期、收缩期与舒张期。</p></div>
-          <div class="info"><b id="relationTitle">刺激强度与收缩</b><p id="relationText">低于阈强度几乎不收缩；介于阈强度与最大刺激之间，张力随强度增加。</p></div>
+        <div class="mode-panel" id="freqPanel">
+          <div class="grid">
+            <div class="field"><label>最终频率 <b><span id="freqEndText">50</span> Hz</b></label><input id="freqEnd" type="range" min="5" max="50" step="1" value="50"></div>
+            <div class="field"><label>频率间隔 <b><span id="freqStepText">2</span> Hz</b></label><input id="freqStep" type="range" min="1" max="5" step="1" value="2"></div>
+          </div>
+          <div class="fixed"><div><b>1 Hz</b>起始频率</div><div><b>5 ms</b>刺激波宽</div><div><b>1.00 V</b>固定幅度</div><div><b id="freqNowText">1 Hz</b>当前输出</div></div>
         </div>
-        <div class="literature"><b>模型参数（教学近似）</b>：潜伏期 10 ms、收缩上升期约 40 ms；为表现 5 Hz 时可见的机械总和，本网页在计算中加入约 190 ms 的有效舒张尾段。刺激强度采用饱和式招募；约 5 Hz 可见收缩总和，约 20 Hz 可见强直收缩示意。此版重点放在实体实验前理解“标本相对位置”与“刺激—反应关系”。</div>
+
+        <div class="buttons"><button class="primary" id="startBtn">开始测量</button><button class="soft" id="stopBtn">暂停测量</button><button class="soft" id="wetBtn">滴加任氏液</button><button class="soft" id="resetSampleBtn">重置样本</button></div>
       </section>
+      <section class="card"><div class="results"><div class="res"><b id="r1">--</b><span id="r1label">阈强度</span></div><div class="res"><b id="r2">--</b><span id="r2label">峰值张力</span></div><div class="res"><b id="r3">待测</b><span id="r3label">波形状态</span></div></div><div class="note"><b>模型依据：</b> 幅度测量会自动从 0 V 开始，每次按设定间隔增加刺激强度；频率测量会自动从 1 Hz 开始，每段按设定间隔增加频率；不同频率段之间会保留较明显的空档，让曲线先回到 0；每段会依频率产生对应次数的脉冲，例如 1Hz 为 1 次、3Hz 为 3 次。每一次刺激都会即时产生波形，任氏液不足或样本疲劳会降低张力反应；新版已降低干燥速度，让样本湿润度更接近实际实验中持续补液的状态。</div></section>
     </section>
   </div>
-</div>
-<div class="toast" id="toast"></div>
+</div><div class="toast" id="toast"></div>
 <script>
-(() => {
-  const stage = document.getElementById('stage');
-  const electrode = document.getElementById('electrode');
-  const ring = document.getElementById('ring');
-  const canvas = document.getElementById('trace');
-  const ctx = canvas.getContext('2d');
-  const led = document.getElementById('led');
-  const toast = document.getElementById('toast');
+(()=>{
+const plot=document.getElementById('plot'),ctx=plot.getContext('2d'),stage=document.getElementById('stage'),toast=document.getElementById('toast');
+const ampTab=document.getElementById('ampTab'),freqTab=document.getElementById('freqTab'),ampPanel=document.getElementById('ampPanel'),freqPanel=document.getElementById('freqPanel');
+const ampEnd=document.getElementById('ampEnd'),ampStep=document.getElementById('ampStep'),freqEnd=document.getElementById('freqEnd'),freqStep=document.getElementById('freqStep');
+const ampEndText=document.getElementById('ampEndText'),ampStepText=document.getElementById('ampStepText'),freqEndText=document.getElementById('freqEndText'),freqStepText=document.getElementById('freqStepText');
+const ampNowText=document.getElementById('ampNowText'),freqNowText=document.getElementById('freqNowText'),graphInfo=document.getElementById('graphInfo');
+const r1=document.getElementById('r1'),r2=document.getElementById('r2'),r3=document.getElementById('r3'),r1label=document.getElementById('r1label'),r2label=document.getElementById('r2label'),r3label=document.getElementById('r3label');
+const mMode=document.getElementById('mMode'),mPeak=document.getElementById('mPeak'),mState=document.getElementById('mState');
+const moistChip=document.getElementById('moistChip'),sampleChip=document.getElementById('sampleChip');
 
-  const strength = document.getElementById('strength');
-  const freq = document.getElementById('freq');
-  const tension = document.getElementById('tension');
-  const strengthVal = document.getElementById('strengthVal');
-  const freqVal = document.getElementById('freqVal');
-  const tensionVal = document.getElementById('tensionVal');
-  const liveForce = document.getElementById('liveForce');
-  const modeTxt = document.getElementById('modeTxt');
-  const qualityTxt = document.getElementById('qualityTxt');
-  const moistTxt = document.getElementById('moistTxt');
-  const fatigueTxt = document.getElementById('fatigueTxt');
-  const moistBar = document.getElementById('moistBar');
-  const fatigueBar = document.getElementById('fatigueBar');
-  const chipContact = document.getElementById('chipContact');
-  const chipMoist = document.getElementById('chipMoist');
-  const chipTension = document.getElementById('chipTension');
-  const phaseTitle = document.getElementById('phaseTitle');
-  const phaseText = document.getElementById('phaseText');
-  const relationTitle = document.getElementById('relationTitle');
-  const relationText = document.getElementById('relationText');
-  const readout = document.getElementById('readout');
+let mode='amp';
+let running=false;
+let simT=0,lastFrame=performance.now();
+let trace=[],pulses=[],labels=[];
+let currentAmp=0,currentFreq=1,nextStimT=0,segmentStartT=0,lastPulseT=-999,nextFreqGap=0.90,ampStimGap=0.75,activeFreqStim=false,segmentPulseCount=0;
+let moisture=1,fatigue=0,peakForce=0;
+const threshold=0.10, maxAmp=2.0, maxTension=10.2;
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 
-  let moisture = 1, fatigue = 0, time = 0, y = 0;
-  let electrodeContact = false, runningTrain = false, lastPulseTime = -999;
-  let trace = [], pulses = [], lastFrame = performance.now();
-  let drag = {active:false,dx:0,dy:0};
-  let animTimer;
-
-  const threshold = 0.75;
-  const maxStim = 3.00;
-  const twitch = {latent:0.010, contract:0.040, relax:0.190};
-
-  function toastMsg(msg){ toast.textContent = msg; toast.classList.add('show'); clearTimeout(toastMsg.t); toastMsg.t = setTimeout(()=>toast.classList.remove('show'),2200); }
-  const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
-
-  function svgToStage(x,y){ const r = stage.getBoundingClientRect(); return {x:x/900*r.width, y:y/600*r.height}; }
-  function stagePos(e){ const r = stage.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top, w:r.width, h:r.height}; }
-  function placeHome(){ const p = svgToStage(560,185); electrode.style.left = p.x+'px'; electrode.style.top = p.y+'px'; electrodeContact = false; updateChips(); }
-  function placeOnNerve(){ const p = svgToStage(507,271); electrode.style.left = p.x+'px'; electrode.style.top = p.y+'px'; electrodeContact = true; updateChips(); }
-  function center(){ const er = electrode.getBoundingClientRect(); const sr = stage.getBoundingClientRect(); return {x:er.left + er.width/2 - sr.left, y:er.top + er.height/2 - sr.top}; }
-  function checkContact(){ const c = center(); const t = svgToStage(507,271); const d = Math.hypot(c.x-t.x,c.y-t.y); electrodeContact = d < Math.min(stage.clientWidth, stage.clientHeight)*0.10; updateChips(); return electrodeContact; }
-
-  function mode(){ const f = +freq.value; if(!runningTrain) return '单收缩'; if(f < 4) return '分离单收缩'; if(f < 10) return '收缩总和'; if(f < 20) return '不完全强直'; return '完全强直'; }
-  function recruit(){ const s = +strength.value; if(s < threshold) return 0; const mid=(threshold+maxStim)/2, k=2.8; const logistic=1/(1+Math.exp(-k*(s-mid))); const base=1/(1+Math.exp(-k*(threshold-mid))); const top=1/(1+Math.exp(-k*(maxStim-mid))); return clamp((logistic-base)/(top-base),0,1); }
-  function tensionFactor(){ const v = +tension.value; return clamp(1 - Math.abs(v-55)/70, .25, 1); }
-  function qualityFactor(){ return clamp(moisture,.08,1) * clamp(1 - fatigue*.62, .25,1) * tensionFactor(); }
-  function twitchKernel(dt){ const lat=twitch.latent, peak=lat+twitch.contract, end=peak+twitch.relax; if(dt<lat||dt>end) return 0; if(dt<=peak){ const x=(dt-lat)/(peak-lat); return Math.pow(Math.sin(x*Math.PI/2),1.35); } const x=(dt-peak)/(end-peak); return Math.pow(Math.cos(x*Math.PI/2),1.18); }
-  function computeForce(t){ let sum=0; for(const p of pulses){ const dt=t-p.t; if(dt>=0&&dt<0.60) sum += p.amp * twitchKernel(dt); } let force = 9.5*Math.tanh(sum*1.35); const f=+freq.value; if(runningTrain && f>=4){ force += clamp((f-4)/16,0,1) * 1.15 * recruit() * qualityFactor(); } return force; }
-
-  function pulseVisual(rec){ ring.classList.remove('fire'); void ring.offsetWidth; ring.classList.add('fire'); led.classList.add('on'); setTimeout(()=>led.classList.remove('on'),140); if(rec>.02){ stage.classList.add('contract'); clearTimeout(animTimer); animTimer = setTimeout(()=>stage.classList.remove('contract'),135+rec*120); } }
-  function addPulse(manual=false){ if(!electrodeContact && manual){ toastMsg('请先把锌铜弓拖到神经接触区，或按“对准神经接触区”。'); return false; } const rec = recruit(); pulseVisual(Math.max(rec,.15)); if(rec<=0.001) toastMsg('刺激低于阈强度：几乎没有可见收缩。'); pulses.push({t:time, amp: rec*qualityFactor()}); lastPulseTime = time; fatigue = clamp(fatigue + 0.015 + rec*.012,0,1); return true; }
-
-  function drawGrid(){ const w=canvas.width,h=canvas.height; ctx.clearRect(0,0,w,h); ctx.fillStyle='#132126'; ctx.fillRect(0,0,w,h); ctx.strokeStyle='rgba(126,215,205,.12)'; for(let x=0;x<w;x+=38){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); } for(let y=0;y<h;y+=34){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); } ctx.strokeStyle='rgba(126,215,205,.28)'; ctx.beginPath(); ctx.moveTo(0,h-34); ctx.lineTo(w,h-34); ctx.stroke(); ctx.fillStyle='rgba(207,230,228,.68)'; ctx.font='12px ui-monospace, monospace'; ctx.fillText('张力',12,18); ctx.fillText('时间 →',w-64,h-12); }
-  function drawTrace(){ drawGrid(); const w=canvas.width,h=canvas.height; if(trace.length<2) return; const maxT=10.5,y0=h-34; const recent=trace.slice(-w); ctx.lineWidth=3; ctx.strokeStyle='#77e0cf'; ctx.shadowColor='rgba(119,224,207,.55)'; ctx.shadowBlur=8; ctx.beginPath(); recent.forEach((p,i)=>{ const x=i/(Math.max(1,recent.length-1))*w; const yy=y0 - clamp(p.force/maxT,0,1.25)*(h-56); if(i===0) ctx.moveTo(x,yy); else ctx.lineTo(x,yy); }); ctx.stroke(); ctx.shadowBlur=0; const start=recent[0]?.t??time, end=recent[recent.length-1]?.t??time; ctx.strokeStyle='rgba(255,179,96,.65)'; ctx.lineWidth=1.2; for(const p of pulses){ if(p.t>=start&&p.t<=end){ const x=(p.t-start)/(end-start||1)*w; ctx.beginPath(); ctx.moveTo(x,9); ctx.lineTo(x,25); ctx.stroke(); } } }
-
-  function updateChips(){ chipContact.className='chip ' + (electrodeContact?'good':''); chipContact.textContent = electrodeContact ? '已接触神经：可刺激' : '锌铜弓：尚未接触神经'; chipMoist.className='chip ' + (moisture<.42?'bad': moisture<.72?'warn':'good'); chipMoist.textContent = moisture<.42 ? '标本偏干：反应下降' : '任氏液：维持湿润'; const tv=+tension.value; chipTension.className='chip ' + ((tv<28||tv>82)?'bad':''); chipTension.textContent = tv<28 ? '连线过松：曲线变小' : tv>82 ? '连线过紧：标本受拉' : '跟腱连线：松紧适当'; }
-
-  function updateLabels(){
-    strengthVal.textContent=(+strength.value).toFixed(2);
-    freqVal.textContent=(+freq.value).toFixed(0);
-    const tv=+tension.value;
-    tensionVal.textContent = tv<28?'过松':tv>82?'过紧':'适中';
-    const m=mode();
-    modeTxt.textContent = m;
-    const q=qualityFactor();
-    qualityTxt.textContent = q>.78?'良好':q>.48?'普通':'偏低';
-    moistTxt.textContent=Math.round(moisture*100)+'%';
-    fatigueTxt.textContent=Math.round(fatigue*100)+'%';
-    moistBar.style.width=Math.round(moisture*100)+'%';
-    fatigueBar.style.width=Math.round(fatigue*100)+'%';
-    liveForce.textContent=y.toFixed(2);
-    readout.textContent=`${y.toFixed(2)} g｜${time.toFixed(2)} s`;
-    if(!runningTrain){ phaseTitle.textContent='单收缩三时相'; phaseText.textContent='单次刺激后先有短暂潜伏期，再进入收缩期，最后回到舒张期。'; }
-    else if(+freq.value<4){ phaseTitle.textContent='分离的单收缩'; phaseText.textContent='刺激间隔大于一次单收缩时间，每次收缩可分开辨认。'; }
-    else if(+freq.value<10){ phaseTitle.textContent='收缩总和'; phaseText.textContent='下一次刺激落在前一次舒张尚未完成时，张力会逐步叠加。'; }
-    else if(+freq.value<20){ phaseTitle.textContent='不完全强直'; phaseText.textContent='收缩与舒张不再完全分离，曲线维持高张力但仍有波动。'; }
-    else { phaseTitle.textContent='完全强直'; phaseText.textContent='刺激很密集时，单次收缩几乎无法分开，张力趋近稳定平台。'; }
-    if(+strength.value<threshold){ relationTitle.textContent='低于阈强度'; relationText.textContent='神经肌肉标本几乎不产生可见收缩，曲线接近基线。'; }
-    else if(+strength.value<maxStim){ relationTitle.textContent='阈上到最大刺激'; relationText.textContent='刺激强度增加时，更多肌纤维被招募，收缩幅度上升。'; }
-    else { relationTitle.textContent='最大刺激以上'; relationText.textContent='反应接近最大，继续增加强度不会明显增加收缩幅度。'; }
-    stage.classList.toggle('dry', moisture<.42);
-    stage.classList.toggle('fatigued', fatigue>.58);
+function toastMsg(t){toast.textContent=t;toast.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toast.classList.remove('show'),2000)}
+function quality(){return clamp(moisture,.18,1)*clamp(1-fatigue*.55,.25,1)}
+function ampRecruit(a){
+  if(a<threshold) return 0;
+  const x=clamp((a-threshold)/(maxAmp-threshold),0,1);
+  return (1-Math.exp(-4.6*x)) * quality();
+}
+function ampForceScale(a){return maxTension*ampRecruit(a)}
+function freqEnvelope(f){
+  const base=8.8*(1-Math.exp(-f/12))*quality();
+  const fatigueDrop=1-clamp((f-34)/28,0,.34);
+  return base*fatigueDrop;
+}
+function twitch(dt){
+  if(dt<0||dt>0.24)return 0;
+  if(dt<0.05){const x=dt/0.05;return Math.pow(Math.sin(x*Math.PI/2),1.35)}
+  const x=(dt-0.05)/0.19;return Math.pow(Math.cos(x*Math.PI/2),1.18);
+}
+function computeForce(t){
+  let s=0;
+  for(const p of pulses){
+    const dt=t-p.t;
+    if(dt>=0&&dt<0.42)s+=p.scale*twitch(dt);
   }
-
-  function loop(now){ const dt=Math.min(.035,(now-lastFrame)/1000); lastFrame=now; time += dt; moisture=clamp(moisture-dt*0.006,0,1); if(!runningTrain) fatigue=clamp(fatigue-dt*0.018,0,1); if(runningTrain){ const interval=1/(+freq.value); if(time-lastPulseTime>=interval) addPulse(false); } y = computeForce(time); trace.push({t:time, force:y}); if(trace.length > canvas.width*1.2) trace.splice(0, trace.length-Math.floor(canvas.width*1.2)); pulses = pulses.filter(p => time-p.t<1.25); drawTrace(); updateLabels(); updateChips(); requestAnimationFrame(loop); }
-
-  electrode.addEventListener('pointerdown', e => { drag.active=true; electrode.setPointerCapture(e.pointerId); const p=stagePos(e); const er=electrode.getBoundingClientRect(); const sr=stage.getBoundingClientRect(); drag.dx=p.x-(er.left+er.width/2-sr.left); drag.dy=p.y-(er.top+er.height/2-sr.top); });
-  electrode.addEventListener('pointermove', e => { if(!drag.active) return; const p=stagePos(e); electrode.style.left = clamp(p.x-drag.dx,48,p.w-48)+'px'; electrode.style.top = clamp(p.y-drag.dy,48,p.h-48)+'px'; checkContact(); });
-  electrode.addEventListener('pointerup', () => { drag.active=false; if(checkContact()) toastMsg('锌铜弓已接触坐骨神经：可以按单次刺激或连续刺激。'); });
-
-  document.getElementById('alignBtn').addEventListener('click',()=>{ placeOnNerve(); toastMsg('已将锌铜弓对准神经接触区。'); });
-  document.getElementById('wetBtn').addEventListener('click',()=>{ moisture=clamp(moisture+.28,0,1); for(let i=0;i<8;i++){ const d=document.createElement('div'); d.className='drop'; d.style.left=(stage.clientWidth*(.55+Math.random()*.23))+'px'; d.style.top=(stage.clientHeight*(.28+Math.random()*.18))+'px'; stage.appendChild(d); setTimeout(()=>d.remove(),820); } toastMsg('已滴加任氏液：湿润度回升，标本反应较稳定。'); });
-  document.getElementById('restBtn').addEventListener('click',()=>{ fatigue=clamp(fatigue-.34,0,1); runningTrain=false; toastMsg('已模拟休息恢复：疲劳下降。'); });
-  document.getElementById('singleBtn').addEventListener('click',()=>{ runningTrain=false; addPulse(true); });
-  document.getElementById('trainBtn').addEventListener('click',()=>{ if(!electrodeContact){ toastMsg('请先让锌铜弓接触神经，再进行连续刺激。'); return; } runningTrain=true; addPulse(false); toastMsg(`连续刺激开始：${+freq.value} Hz，观察是否出现总和或强直收缩。`); setTimeout(()=>runningTrain=false,3000); });
-  document.getElementById('resetBtn').addEventListener('click',()=>{ moisture=1; fatigue=0; time=0; y=0; runningTrain=false; lastPulseTime=-999; trace=[]; pulses=[]; placeHome(); drawTrace(); updateLabels(); updateChips(); toastMsg('已恢复初始状态。'); });
-  [strength,freq,tension].forEach(el => el.addEventListener('input',()=>{ updateLabels(); updateChips(); }));
-  window.addEventListener('resize',()=>checkContact());
-
-  placeHome(); drawTrace(); updateLabels(); updateChips(); requestAnimationFrame(loop);
+  let y=s;
+  if(mode==='freq' && running && activeFreqStim && currentFreq>=18){
+    const env=freqEnvelope(currentFreq);
+    const ripple=currentFreq>=35?0.07:0.16;
+    y=Math.max(y, env*(0.78+ripple*Math.sin(2*Math.PI*Math.min(currentFreq,12)*t)));
+  }
+  return Math.max(0,y);
+}
+function pulseVisual(level){
+  if(level<=0)return;
+  stage.classList.add('contract');
+  clearTimeout(pulseVisual.t);
+  pulseVisual.t=setTimeout(()=>stage.classList.remove('contract'),130+level*18);
+}
+function addPulse(scale,labelText,pulseT=simT){
+  pulses.push({t:pulseT,scale});
+  if(labelText)labels.push({t:pulseT,text:labelText});
+  peakForce=Math.max(peakForce,scale);
+  pulseVisual(scale);
+  fatigue=clamp(fatigue+0.004+scale*0.0009,0,1);
+  moisture=clamp(moisture-0.00025,0,1);
+}
+function setMode(next){
+  mode=next; running=false;
+  ampTab.classList.toggle('active',mode==='amp'); freqTab.classList.toggle('active',mode==='freq');
+  ampPanel.classList.toggle('active',mode==='amp'); freqPanel.classList.toggle('active',mode==='freq');
+  mMode.textContent=mode==='amp'?'幅度递增':'频率递增';
+  r1label.textContent=mode==='amp'?'阈强度':'起始频率';
+  r2label.textContent=mode==='amp'?'峰值张力':'最高频率';
+  r3label.textContent='波形状态';
+  resetGraphOnly();
+}
+function resetGraphOnly(){
+  simT=0;trace=[];pulses=[];labels=[];currentAmp=0;currentFreq=1;nextStimT=0;segmentStartT=0;lastPulseT=-999;activeFreqStim=false;segmentPulseCount=0;peakForce=0;
+  ampNowText.textContent='0.00 V';freqNowText.textContent='1 Hz';
+  r1.textContent='--';r2.textContent='--';r3.textContent='待测';mPeak.textContent='--';mState.textContent='待测';
+  graphInfo.textContent='等待开始测量';
+  draw();
+}
+function updateLabels(){
+  ampEndText.textContent=(+ampEnd.value).toFixed(2);
+  ampStepText.textContent=(+ampStep.value).toFixed(2);
+  freqEndText.textContent=(+freqEnd.value).toFixed(0);
+  freqStepText.textContent=(+freqStep.value).toFixed(0);
+  ampNowText.textContent=currentAmp.toFixed(2)+' V';
+  freqNowText.textContent=currentFreq.toFixed(0)+' Hz';
+  moistChip.className='chip '+(moisture<.45?'bad':moisture<.75?'warn':'ok');
+  moistChip.textContent=moisture<.45?'任氏液：偏干，反应下降':moisture<.75?'任氏液：需补充':'任氏液：保持湿润';
+  sampleChip.className='chip '+(fatigue>.72?'bad':fatigue>.45?'warn':'ok');
+  sampleChip.textContent=fatigue>.72?'样本：疲劳明显':fatigue>.45?'样本：略疲劳':'样本：可测量';
+}
+function axes(){
+  const w=plot.width,h=plot.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#222';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(70,34);ctx.lineTo(70,h-52);ctx.lineTo(w-36,h-52);ctx.stroke();
+  ctx.fillStyle='#111';ctx.font='14px Microsoft YaHei';ctx.fillText('曲线类型：骨骼肌力学分析',45,22);
+  ctx.font='12px Microsoft YaHei';ctx.save();ctx.translate(28,h/2);ctx.rotate(-Math.PI/2);ctx.fillText('张力 g',0,0);ctx.restore();
+  ctx.fillText('时间 / 刺激输出记录',78,h-20);
+  ctx.strokeStyle='rgba(0,0,0,.08)';ctx.lineWidth=1;
+  for(let y=50;y<h-52;y+=32){ctx.beginPath();ctx.moveTo(70,y);ctx.lineTo(w-36,y);ctx.stroke();}
+  ctx.fillStyle='#222';ctx.font='11px Microsoft YaHei';
+  for(let v=0;v<=12;v+=2){
+    const y=h-52-(v/12)*(h-92);
+    ctx.fillText(String(v),45,y+4);
+  }
+}
+function draw(){
+  axes();
+  const w=plot.width,h=plot.height,x0=70,y0=h-52,plotW=w-120,plotH=h-92;
+  const windowT= mode==='amp'? Math.max(12, simT+1) : Math.max(20, simT+1);
+  const tMin=Math.max(0, windowT-(mode==='freq'?28:20)), tMax=Math.max(windowT,(mode==='freq'?28:20));
+  ctx.strokeStyle='#d62c2c';ctx.lineWidth=2;ctx.beginPath();
+  let first=true;
+  for(const p of trace){
+    if(p.t<tMin)continue;
+    const x=x0+(p.t-tMin)/(tMax-tMin)*plotW;
+    const y=y0-clamp(p.y/12,0,1.2)*plotH;
+    if(first){ctx.moveTo(x,y);first=false}else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#111';ctx.font='12px Microsoft YaHei';
+  for(const lab of labels){
+    if(lab.t<tMin||lab.t>tMax)continue;
+    const x=x0+(lab.t-tMin)/(tMax-tMin)*plotW;
+    ctx.fillText(lab.text,x-14,y0+18);
+  }
+  ctx.fillStyle='#555';ctx.font='11px Microsoft YaHei';
+  ctx.fillText(`${tMin.toFixed(1)} s`,x0,y0+36);
+  ctx.fillText(`${tMax.toFixed(1)} s`,x0+plotW-38,y0+36);
+}
+function start(){
+  resetGraphOnly();
+  running=true;
+  if(mode==='amp'){
+    currentAmp=0;nextStimT=0.2;
+    graphInfo.textContent='幅度递增测量中：0 V 开始自动增加';
+    r1.textContent='0.10 V';r3.textContent='测量中';mState.textContent='测量中';
+  }else{
+    currentFreq=1;segmentStartT=0;nextStimT=0.2;lastPulseT=-999;activeFreqStim=false;segmentPulseCount=0;
+    graphInfo.textContent='频率递增测量中：1 Hz 开始自动增加';
+    r1.textContent='1 Hz';r3.textContent='测量中';mState.textContent='测量中';
+  }
+  updateLabels();
+  toastMsg(mode==='amp'?'开始幅度递增：每次刺激自动增加强度。':'开始频率递增：每段频率自动提高。');
+}
+function stop(){running=false;toastMsg('已暂停测量。');}
+function wet(){moisture=clamp(moisture+0.3,0,1);updateLabels();toastMsg('已滴加任氏液：湿润度回升，样本可继续维持较久。')}
+function resetSample(){running=false;moisture=1;fatigue=0;resetGraphOnly();updateLabels();toastMsg('已重置样本与数据图。')}
+function processAuto(){
+  if(!running)return;
+  if(mode==='amp'){
+    if(simT>=nextStimT){
+      const end=+ampEnd.value, step=+ampStep.value;
+      if(currentAmp>end+1e-9){
+        running=false;
+        r3.textContent='测量完成';mState.textContent='完成';
+        graphInfo.textContent='幅度递增测量完成';
+        toastMsg('幅度递增测量完成。');
+        return;
+      }
+      const scale=ampForceScale(currentAmp);
+      addPulse(scale, currentAmp.toFixed(2)+'V');
+      if(currentAmp<threshold) r3.textContent='尚未跳动';
+      else if(currentAmp<maxAmp) r3.textContent='张力上升';
+      else r3.textContent='接近平台';
+      mState.textContent=r3.textContent;
+      r2.textContent=Math.max(peakForce,0).toFixed(2)+' g';
+      mPeak.textContent=Math.max(peakForce,0).toFixed(2)+' g';
+      graphInfo.textContent=`输出 ${currentAmp.toFixed(2)} V，下一次 +${step.toFixed(2)} V（刺激间隔已拉开）`;
+      currentAmp=+(currentAmp+step).toFixed(4);
+      nextStimT+=ampStimGap;
+    }
+  }else{
+    const end=+freqEnd.value, step=+freqStep.value;
+    if(currentFreq>end+1e-9){
+      running=false;
+      r3.textContent='测量完成';mState.textContent='完成';
+      graphInfo.textContent='频率递增测量完成';
+      toastMsg('频率递增测量完成。');
+      return;
+    }
+    const segDur=1.45;
+    if(simT-segmentStartT>segDur){
+      activeFreqStim=false;
+      currentFreq=+(currentFreq+step).toFixed(4);
+      segmentStartT=simT+nextFreqGap;
+      nextStimT=segmentStartT;
+      lastPulseT=-999;
+      segmentPulseCount=0;
+      pulses=[]; // 进入下一频率段前让上一段波形完全结束，确保曲线先回到 0
+      if(currentFreq<=end+1e-9) labels.push({t:segmentStartT,text:'↑'+currentFreq.toFixed(0)+'Hz'});
+    }
+    activeFreqStim = (simT>=segmentStartT && simT<=segmentStartT+segDur && currentFreq<=end+1e-9);
+    if(activeFreqStim){
+      const targetPulseCount=Math.max(1,Math.round(currentFreq)); // 1Hz只打1次、3Hz只打3次、5Hz只打5次
+      const interval=1/currentFreq;
+      while(segmentPulseCount<targetPulseCount && simT>=segmentStartT+segmentPulseCount*interval){
+        const pulseT=segmentStartT+segmentPulseCount*interval;
+        const scale=freqEnvelope(currentFreq);
+        addPulse(scale,currentFreq===1&&segmentPulseCount===0?'↑1Hz':'',pulseT);
+        lastPulseT=pulseT;
+        segmentPulseCount++;
+        const state=currentFreq<4?'分离单收缩':currentFreq<10?'收缩总和':currentFreq<20?'不完全强直':'接近强直';
+        r2.textContent=currentFreq.toFixed(0)+' Hz';
+        r3.textContent=state;mState.textContent=state;
+        mPeak.textContent=Math.max(peakForce,0).toFixed(2)+' g';
+        graphInfo.textContent=`当前频率 ${currentFreq.toFixed(0)} Hz，本段脉冲 ${segmentPulseCount}/${targetPulseCount}`;
+      }
+    }
+  }
+}
+function loop(now){
+  const dt=Math.min(.035,(now-lastFrame)/1000);lastFrame=now;
+  simT+=dt;
+  if(!running)fatigue=clamp(fatigue-dt*.01,0,1);
+  processAuto();
+  const y=computeForce(simT);
+  trace.push({t:simT,y});
+  if(trace.length>2400)trace.splice(0,trace.length-2400);
+  pulses=pulses.filter(p=>simT-p.t<1.4);
+  draw();
+  updateLabels();
+  requestAnimationFrame(loop);
+}
+ampTab.onclick=()=>setMode('amp');freqTab.onclick=()=>setMode('freq');
+document.getElementById('startBtn').onclick=start;
+document.getElementById('stopBtn').onclick=stop;
+document.getElementById('wetBtn').onclick=wet;
+document.getElementById('resetSampleBtn').onclick=resetSample;
+[ampEnd,ampStep,freqEnd,freqStep].forEach(el=>el.addEventListener('input',updateLabels));
+updateLabels();draw();requestAnimationFrame(loop);
 })();
 </script>
 </body>

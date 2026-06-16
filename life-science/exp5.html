@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>坐骨神经－腓肠肌实验模拟</title>
+<title>骨骼肌单收缩与复合收缩模拟</title>
 <style>
 :root{--bg:#eef5f8;--panel:#fff;--panel2:#f5f9fb;--line:#d7e2e8;--text:#23343d;--muted:#667a84;--accent:#2f8392;--accent2:#db7b43;--ok:#29936b;--bad:#c65a5a;--red:#d62c2c}
 *{box-sizing:border-box}body{margin:0;font-family:"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#eff7fa,#e5eef3);color:var(--text)}
-.app{height:100vh;max-width:1540px;margin:0 auto;padding:12px;display:grid;grid-template-rows:auto 1fr;gap:12px}.top{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}.card{background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 28px rgba(38,63,78,.08)}.hero{padding:18px 20px}.hero h1{margin:0 0 6px;font-size:30px;line-height:1.15}.hero p{margin:0;color:var(--muted);font-size:15px;line-height:1.62}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}.metric{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:12px;text-align:center}.metric b{display:block;color:var(--accent);font-size:24px;margin-bottom:4px}.metric span{font-size:12px;font-weight:800;color:var(--muted)}
+.app{height:100vh;max-width:1540px;margin:0 auto;padding:12px;display:grid;grid-template-rows:auto 1fr;gap:12px}.top{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}.card{background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 28px rgba(38,63,78,.08)}.hero{padding:20px 24px}.hero h1{margin:0;font-size:46px;line-height:1.12;font-weight:900}.hero p{display:none}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}.metric{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:12px;text-align:center}.metric b{display:block;color:var(--accent);font-size:24px;margin-bottom:4px}.metric span{font-size:12px;font-weight:800;color:var(--muted)}
 .main{min-height:0;display:grid;grid-template-columns:minmax(650px,1.05fr) minmax(620px,.95fr);gap:12px}.left{display:grid;min-height:0}.stage-card{padding:16px;display:flex;flex-direction:column;min-height:0}.head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.head h2{margin:0;font-size:20px}.small{font-size:13px;color:var(--muted);line-height:1.55}.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{font-size:12px;font-weight:900;padding:8px 11px;border-radius:999px;background:#f6fbfc;border:1px solid rgba(58,88,99,.16);color:#55666f}.chip.ok{color:var(--ok);border-color:rgba(41,147,107,.25)}.chip.warn{color:#b7791f;border-color:rgba(183,121,31,.25)}.chip.bad{color:var(--bad);border-color:rgba(198,90,90,.25)}
 .stage{position:relative;flex:1;min-height:500px;border-radius:28px;overflow:hidden;border:1px solid #c8d6dd;background:linear-gradient(180deg,#cfe7f4 0%,#beddec 48%,#e4edf2 48.2%,#dfe9ef 100%)}.curtain{position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.13) 0 70px,rgba(83,128,154,.035) 70px 140px)}#rig{position:relative;display:block;width:100%;height:100%;z-index:1}.anno{position:absolute;z-index:3;background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.9);box-shadow:0 8px 18px rgba(38,60,72,.08);border-radius:16px;padding:8px 10px;font-size:12px;color:#556871;line-height:1.34;pointer-events:none}.a-trans{left:62%;top:10%}.a-muscle{left:40%;top:38%}.a-fix{left:18%;top:70%}.a-electrode{left:56%;top:72%}.a-medlab{left:70%;top:78%}#muscleGroup{transition:transform .12s ease-out}.contract #muscleGroup{transform:translateY(-10px) scaleY(.88);transform-origin:62% 73%}.contract #leverNeedle{transform:rotate(-14deg);transform-origin:580px 111px}#leverNeedle{transition:transform .12s ease-out}
 .right{display:grid;grid-template-rows:minmax(340px,.9fr) auto auto;gap:12px;min-height:0}.graph-card{padding:12px 14px;display:flex;flex-direction:column;min-height:0}.graph-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}.graph-title h2{margin:0;font-size:18px}.graph-title span{color:var(--muted);font-size:12px;font-weight:900}canvas{display:block;width:100%;height:100%;min-height:300px;background:#fff;border:1px solid var(--line);border-radius:16px}.controls{padding:14px}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.tab{background:#fff;border:1px solid var(--line);color:var(--text)}.tab.active{background:var(--accent);color:#fff}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:10px}.field label{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:900;margin-bottom:6px}.field b{color:var(--accent)}input[type=range]{width:100%;accent-color:var(--accent)}.fixed{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.fixed div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px;text-align:center;font-size:12px;color:var(--muted)}.fixed b{display:block;color:var(--text);font-size:14px}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}button{border:0;border-radius:15px;padding:11px 12px;font-size:14px;font-weight:900;cursor:pointer;transition:.15s}button:hover{transform:translateY(-1px)}.primary{background:var(--accent);color:#fff}.orange{background:var(--accent2);color:#fff}.soft{background:#fff;border:1px solid var(--line);color:var(--text)}.results{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}.res{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:10px}.res b{display:block;font-size:18px;color:var(--accent)}.res span{font-size:12px;font-weight:800;color:var(--muted)}.note{padding:0 14px 14px;color:#5f717a;font-size:12px;line-height:1.55}.note b{color:#245e69}.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(18px);background:#22343b;color:#fff;border-radius:16px;padding:12px 15px;font-weight:900;opacity:0;transition:.2s;pointer-events:none;z-index:50;box-shadow:0 12px 26px rgba(0,0,0,.16);max-width:min(760px,calc(100vw - 28px));line-height:1.45}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -18,8 +18,8 @@
 <div class="app">
   <div class="top">
     <section class="card hero">
-      <h1>坐骨神经－腓肠肌实验模拟</h1>
-      <p></p>
+      <h1>骨骼肌单收缩与复合收缩模拟</h1>
+      <p>本版改为动态测量流程：先选择「幅度递增」或「频率递增」，按下开始测量后，MedLab 会自动逐次提高强度或频率；每一次电刺激都会在右侧即时产生波形，直到达到设定最大值后自动停止。</p>
     </section>
     <section class="card metrics">
       <div class="metric"><b id="mMode">幅度递增</b><span>当前实验</span></div>
@@ -56,9 +56,9 @@
     </section>
 
     <section class="right">
-      <section class="card graph-card"><div class="graph-title"><h2>数据图 / MedLab 骨骼肌力学分析</h2><span id="graphInfo">等待开始测量</span></div><canvas id="plot" width="760" height="360"></canvas></section>
+      <section class="card graph-card"><div class="graph-title"><h2>数据图 / MedLab 骨骼肌力学分析</h2><span id="graphInfo">等待开始测量</span></div><canvas id="plot" width="760" height="420"></canvas></section>
       <section class="card controls">
-        <div class="tabs"><button class="tab active" id="ampTab">幅度递增测量</button><button class="tab" id="freqTab">频率递增测量</button></div>
+        <div class="tabs"><button class="tab active" id="ampTab">刺激强度对骨骼肌收缩的影响</button><button class="tab" id="freqTab">刺激频率对骨骼肌收缩的影响</button></div>
 
         <div class="mode-panel active" id="ampPanel">
           <div class="grid">
@@ -78,7 +78,7 @@
 
         <div class="buttons"><button class="primary" id="startBtn">开始测量</button><button class="soft" id="stopBtn">暂停测量</button><button class="soft" id="wetBtn">滴加任氏液</button><button class="soft" id="resetSampleBtn">重置样本</button></div>
       </section>
-      <section class="card"><div class="results"><div class="res"><b id="r1">--</b><span id="r1label">阈强度</span></div><div class="res"><b id="r2">--</b><span id="r2label">峰值张力</span></div><div class="res"><b id="r3">待测</b><span id="r3label">波形状态</span></div></div><div class="note"><b>模型依据：</b> 幅度测量会自动从 0 V 开始，每次按设定间隔增加刺激强度；频率测量会自动从 1 Hz 开始，每段按设定间隔增加频率；不同频率段之间会保留较明显的空档，让曲线先回到 0；每段会依频率产生对应次数的脉冲，例如 1Hz 为 1 次、3Hz 为 3 次。每一次刺激都会即时产生波形，任氏液不足或样本疲劳会降低张力反应；新版已降低干燥速度，让样本湿润度更接近实际实验中持续补液的状态。</div></section>
+      <section class="card"><div class="results"><div class="res"><b id="r1">--</b><span id="r1label">阈强度</span></div><div class="res"><b id="r2">--</b><span id="r2label">峰值张力</span></div><div class="res"><b id="r3">待测</b><span id="r3label">波形状态</span></div></div><div class="note"><b>模型依据：</b> 刺激强度测量会自动从 0 V 开始，每次按设定间隔增加刺激强度，并在 1.0 V 后进入等张力平台；刺激频率测量会自动从 1 Hz 开始，每段按设定间隔增加频率；不同频率段之间会保留明显空档；高频后期波峰顶部会逐渐趋于平顶，并自动缩放纵轴避免峰值被截断，停止刺激后会出现向右下倾斜的舒张回落。每段会依频率产生对应次数的脉冲，例如 1Hz 为 1 次、3Hz 为 3 次。每一次刺激都会即时产生波形，任氏液不足或样本疲劳会降低张力反应；新版已降低干燥速度，让样本湿润度更接近实际实验中持续补液的状态。</div></section>
     </section>
   </div>
 </div><div class="toast" id="toast"></div>
@@ -97,7 +97,7 @@ let mode='amp';
 let running=false;
 let simT=0,lastFrame=performance.now();
 let trace=[],pulses=[],labels=[];
-let currentAmp=0,currentFreq=1,nextStimT=0,segmentStartT=0,lastPulseT=-999,nextFreqGap=0.90,ampStimGap=0.75,activeFreqStim=false,segmentPulseCount=0;
+let currentAmp=0,currentFreq=1,nextStimT=0,segmentStartT=0,lastPulseT=-999,nextFreqGap=0.95,ampStimGap=1.00,activeFreqStim=false,segmentPulseCount=0;
 let moisture=1,fatigue=0,peakForce=0;
 const threshold=0.10, maxAmp=2.0, maxTension=10.2;
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -106,8 +106,9 @@ function toastMsg(t){toast.textContent=t;toast.classList.add('show');clearTimeou
 function quality(){return clamp(moisture,.18,1)*clamp(1-fatigue*.55,.25,1)}
 function ampRecruit(a){
   if(a<threshold) return 0;
-  const x=clamp((a-threshold)/(maxAmp-threshold),0,1);
-  return (1-Math.exp(-4.6*x)) * quality();
+  if(a>=1.0) return 1;
+  const x=clamp((a-threshold)/(1.0-threshold),0,1);
+  return (1-Math.exp(-4.2*x));
 }
 function ampForceScale(a){return maxTension*ampRecruit(a)}
 function freqEnvelope(f){
@@ -116,21 +117,25 @@ function freqEnvelope(f){
   return base*fatigueDrop;
 }
 function twitch(dt){
-  if(dt<0||dt>0.24)return 0;
+  if(dt<0||dt>0.30)return 0;
   if(dt<0.05){const x=dt/0.05;return Math.pow(Math.sin(x*Math.PI/2),1.35)}
-  const x=(dt-0.05)/0.19;return Math.pow(Math.cos(x*Math.PI/2),1.18);
+  const x=(dt-0.05)/0.25;return Math.pow(Math.cos(Math.min(x,1)*Math.PI/2),1.12);
 }
 function computeForce(t){
   let s=0;
   for(const p of pulses){
     const dt=t-p.t;
-    if(dt>=0&&dt<0.42)s+=p.scale*twitch(dt);
+    if(dt>=0&&dt<0.55)s+=p.scale*twitch(dt);
   }
   let y=s;
-  if(mode==='freq' && running && activeFreqStim && currentFreq>=18){
+  if(mode==='freq' && running && activeFreqStim){
     const env=freqEnvelope(currentFreq);
-    const ripple=currentFreq>=35?0.07:0.16;
-    y=Math.max(y, env*(0.78+ripple*Math.sin(2*Math.PI*Math.min(currentFreq,12)*t)));
+    if(currentFreq>=18){
+      const ripple=currentFreq>=35?0.012:(currentFreq>=25?0.025:0.05);
+      y=env*(0.93+ripple*Math.sin(2*Math.PI*6*t)); // 高频强直收缩改为平顶平台，避免顶端被切掉
+    }else if(currentFreq>=10){
+      y=Math.min(s, env*1.12); // 中频进入不完全强直，保留波动但限制过高尖峰
+    }
   }
   return Math.max(0,y);
 }
@@ -152,7 +157,7 @@ function setMode(next){
   mode=next; running=false;
   ampTab.classList.toggle('active',mode==='amp'); freqTab.classList.toggle('active',mode==='freq');
   ampPanel.classList.toggle('active',mode==='amp'); freqPanel.classList.toggle('active',mode==='freq');
-  mMode.textContent=mode==='amp'?'幅度递增':'频率递增';
+  mMode.textContent=mode==='amp'?'刺激强度':'刺激频率';
   r1label.textContent=mode==='amp'?'阈强度':'起始频率';
   r2label.textContent=mode==='amp'?'峰值张力':'最高频率';
   r3label.textContent='波形状态';
@@ -177,8 +182,11 @@ function updateLabels(){
   sampleChip.className='chip '+(fatigue>.72?'bad':fatigue>.45?'warn':'ok');
   sampleChip.textContent=fatigue>.72?'样本：疲劳明显':fatigue>.45?'样本：略疲劳':'样本：可测量';
 }
+function yMax(){
+  return mode==='freq' ? 14 : 12;
+}
 function axes(){
-  const w=plot.width,h=plot.height;
+  const w=plot.width,h=plot.height, ymax=yMax();
   ctx.clearRect(0,0,w,h);
   ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
   ctx.strokeStyle='#222';ctx.lineWidth=1.5;
@@ -189,8 +197,8 @@ function axes(){
   ctx.strokeStyle='rgba(0,0,0,.08)';ctx.lineWidth=1;
   for(let y=50;y<h-52;y+=32){ctx.beginPath();ctx.moveTo(70,y);ctx.lineTo(w-36,y);ctx.stroke();}
   ctx.fillStyle='#222';ctx.font='11px Microsoft YaHei';
-  for(let v=0;v<=12;v+=2){
-    const y=h-52-(v/12)*(h-92);
+  for(let v=0;v<=ymax;v+=2){
+    const y=h-52-(v/ymax)*(h-92);
     ctx.fillText(String(v),45,y+4);
   }
 }
@@ -204,7 +212,7 @@ function draw(){
   for(const p of trace){
     if(p.t<tMin)continue;
     const x=x0+(p.t-tMin)/(tMax-tMin)*plotW;
-    const y=y0-clamp(p.y/12,0,1.2)*plotH;
+    const y=y0-clamp(p.y/yMax(),0,0.98)*plotH;
     if(first){ctx.moveTo(x,y);first=false}else ctx.lineTo(x,y);
   }
   ctx.stroke();
@@ -222,16 +230,16 @@ function start(){
   resetGraphOnly();
   running=true;
   if(mode==='amp'){
-    currentAmp=0;nextStimT=0.2;
-    graphInfo.textContent='幅度递增测量中：0 V 开始自动增加';
+    currentAmp=0;nextStimT=1.0;
+    graphInfo.textContent='刺激强度测量中：0 V 开始自动增加';
     r1.textContent='0.10 V';r3.textContent='测量中';mState.textContent='测量中';
   }else{
-    currentFreq=1;segmentStartT=0;nextStimT=0.2;lastPulseT=-999;activeFreqStim=false;segmentPulseCount=0;
-    graphInfo.textContent='频率递增测量中：1 Hz 开始自动增加';
+    currentFreq=1;segmentStartT=1.0;nextStimT=1.0;lastPulseT=-999;activeFreqStim=false;segmentPulseCount=0;
+    graphInfo.textContent='刺激频率测量中：1 Hz 开始自动增加';
     r1.textContent='1 Hz';r3.textContent='测量中';mState.textContent='测量中';
   }
   updateLabels();
-  toastMsg(mode==='amp'?'开始幅度递增：每次刺激自动增加强度。':'开始频率递增：每段频率自动提高。');
+  toastMsg(mode==='amp'?'开始刺激强度测量：每次刺激自动增加强度。':'开始刺激频率测量：每段频率自动提高。');
 }
 function stop(){running=false;toastMsg('已暂停测量。');}
 function wet(){moisture=clamp(moisture+0.3,0,1);updateLabels();toastMsg('已滴加任氏液：湿润度回升，样本可继续维持较久。')}
@@ -244,8 +252,8 @@ function processAuto(){
       if(currentAmp>end+1e-9){
         running=false;
         r3.textContent='测量完成';mState.textContent='完成';
-        graphInfo.textContent='幅度递增测量完成';
-        toastMsg('幅度递增测量完成。');
+        graphInfo.textContent='刺激强度测量完成';
+        toastMsg('刺激强度测量完成。');
         return;
       }
       const scale=ampForceScale(currentAmp);
@@ -265,8 +273,8 @@ function processAuto(){
     if(currentFreq>end+1e-9){
       running=false;
       r3.textContent='测量完成';mState.textContent='完成';
-      graphInfo.textContent='频率递增测量完成';
-      toastMsg('频率递增测量完成。');
+      graphInfo.textContent='刺激频率测量完成';
+      toastMsg('刺激频率测量完成。');
       return;
     }
     const segDur=1.45;
@@ -277,7 +285,7 @@ function processAuto(){
       nextStimT=segmentStartT;
       lastPulseT=-999;
       segmentPulseCount=0;
-      pulses=[]; // 进入下一频率段前让上一段波形完全结束，确保曲线先回到 0
+      // 保留上一段的自然舒张尾迹，使末端出现向右下倾斜的回落线
       if(currentFreq<=end+1e-9) labels.push({t:segmentStartT,text:'↑'+currentFreq.toFixed(0)+'Hz'});
     }
     activeFreqStim = (simT>=segmentStartT && simT<=segmentStartT+segDur && currentFreq<=end+1e-9);
@@ -290,7 +298,7 @@ function processAuto(){
         addPulse(scale,currentFreq===1&&segmentPulseCount===0?'↑1Hz':'',pulseT);
         lastPulseT=pulseT;
         segmentPulseCount++;
-        const state=currentFreq<4?'分离单收缩':currentFreq<10?'收缩总和':currentFreq<20?'不完全强直':'接近强直';
+        const state=currentFreq<4?'分离单收缩':currentFreq<10?'收缩总和':currentFreq<20?'不完全强直':(currentFreq<35?'强直收缩':'强直收缩（平顶）');
         r2.textContent=currentFreq.toFixed(0)+' Hz';
         r3.textContent=state;mState.textContent=state;
         mPeak.textContent=Math.max(peakForce,0).toFixed(2)+' g';
